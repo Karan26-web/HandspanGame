@@ -1,0 +1,898 @@
+/* ============================================================================
+ * style.css — Handspan Game
+ * Design surface is a fixed 1280x720 stage, uniformly scaled to the viewport.
+ * Palette + components aim for a premium, Disney-soft children's look.
+ * ========================================================================== */
+
+:root {
+  --stage-w: 1280px;
+  --stage-h: 720px;
+
+  /* Brand palette */
+  --purple-1: #7b1fa2;
+  --purple-2: #9c27b0;
+  --purple-3: #b94dd6;
+  --purple-deep: #4a0e63;
+  --yellow: #ffd24a;
+  --yellow-deep: #f5a623;
+  --orange-1: #ff9f1c;
+  --orange-2: #ff7a00;
+  --green-soft: #d7eeb6;
+  --green-mid: #b6e08a;
+  --green-deep: #2f6b2f;
+  --ink: #2a2235;
+
+  --shadow-soft: 0 10px 30px rgba(40, 20, 60, 0.18);
+  --shadow-pop: 0 14px 38px rgba(40, 20, 60, 0.30);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0e0b18;
+  font-family: "Baloo 2", "Nunito", "Quicksand", system-ui, -apple-system, "Segoe UI", sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* ---- Stage scaling --------------------------------------------------- */
+#viewport {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(120% 120% at 50% 0%, #2a1840 0%, #160d28 55%, #0c0717 100%);
+}
+
+#stage {
+  position: relative;
+  width: var(--stage-w);
+  height: var(--stage-h);
+  transform: scale(var(--scale, 1));
+  transform-origin: center center;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+}
+
+.fx-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hidden { display: none !important; }
+
+/* ============================================================================
+ * BACKGROUND — uniform room image (assets/Bgm.png) on every screen
+ * ========================================================================== */
+.bg {
+  position: absolute; inset: 0; z-index: 0; overflow: hidden;
+  background: url("assets/Bgm.png") center center / cover no-repeat;
+}
+/* A subtle vignette to help white/dark UI read against the warm wall. */
+.bg::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 80% at 50% 30%, transparent 55%, rgba(60, 30, 10, 0.18) 100%);
+}
+/* Background is uniform; the .bg--castle / .bg--play modifiers are kept as
+   no-ops so existing setBackground() calls remain valid. */
+.bg--play, .bg--castle { /* same uniform room background */ }
+
+/* ============================================================================
+ * BOOT / TAP TO PLAY
+ * ========================================================================== */
+.boot {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(120% 120% at 50% 30%, #3a1d5c, #160d28 70%);
+}
+.boot.hidden { display: none; }
+.boot__card { text-align: center; animation: float-bob 3.6s ease-in-out infinite; }
+@keyframes float-bob { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-12px);} }
+.boot__title {
+  font-size: 72px; font-weight: 800; color: #fff; letter-spacing: 1px;
+  text-shadow: 0 6px 0 rgba(123,31,162,0.6), 0 14px 30px rgba(0,0,0,0.5);
+}
+.boot__hint { color: #f0d9ff; font-size: 24px; margin: 6px 0 34px; font-weight: 600; }
+
+/* ============================================================================
+ * BUTTONS
+ * ========================================================================== */
+.btn {
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 26px;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  padding: 16px 38px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--orange-1), var(--orange-2));
+  box-shadow: 0 8px 0 #c85e00, var(--shadow-soft);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.15s ease;
+  letter-spacing: 0.4px;
+}
+.btn:hover { transform: translateY(-2px) scale(1.03); filter: brightness(1.05); }
+.btn:active { transform: translateY(4px) scale(0.99); box-shadow: 0 3px 0 #c85e00, var(--shadow-soft); }
+.btn:disabled { opacity: 0.5; cursor: default; filter: grayscale(0.3); }
+
+.btn--play {
+  font-size: 34px; padding: 20px 56px;
+  background: linear-gradient(180deg, #ffd24a, #ff9f1c);
+  box-shadow: 0 9px 0 #c97f0a, var(--shadow-pop);
+  color: #5a3200;
+}
+.btn--play:active { box-shadow: 0 3px 0 #c97f0a, var(--shadow-pop); }
+
+.btn--purple {
+  background: linear-gradient(180deg, var(--purple-3), var(--purple-1));
+  box-shadow: 0 8px 0 #5a157a, var(--shadow-soft);
+}
+.btn--purple:active { box-shadow: 0 3px 0 #5a157a, var(--shadow-soft); }
+
+.btn--green {
+  background: linear-gradient(180deg, #7ee08a, #38b24a);
+  box-shadow: 0 8px 0 #1f8a33, var(--shadow-soft);
+}
+.btn--green:active { box-shadow: 0 3px 0 #1f8a33, var(--shadow-soft); }
+
+/* tap-to-continue pill */
+.tap-continue {
+  position: absolute; top: 26px; right: 30px; z-index: 30;
+  font-family: inherit; font-weight: 800; font-size: 20px; color: #fff;
+  padding: 12px 22px; border: none; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(180deg, var(--purple-3), var(--purple-1));
+  box-shadow: 0 6px 0 #5a157a, var(--shadow-soft);
+  animation: nudge-x 1.8s ease-in-out infinite;
+}
+.tap-continue:hover { filter: brightness(1.08); }
+.tap-continue__arrow { display: inline-block; animation: nudge-x 1.2s ease-in-out infinite; }
+@keyframes nudge-x { 0%,100%{ transform: translateX(0);} 50%{ transform: translateX(5px);} }
+
+/* tap-anywhere-to-continue: invisible catcher + subtle hint (no button) */
+.tap-catcher { position: absolute; inset: 0; z-index: 50; cursor: pointer; }
+.tap-hint {
+  position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+  z-index: 51; pointer-events: none;
+  color: #fff; font-weight: 800; font-size: 20px; letter-spacing: 0.5px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  animation: hint-bob 1.3s ease-in-out infinite;
+}
+.tap-hint::after { content: "  ➜"; }
+@keyframes hint-bob {
+  0%,100% { transform: translateX(-50%) translateY(0); opacity: 0.65; }
+  50%     { transform: translateX(-50%) translateY(-5px); opacity: 1; }
+}
+
+/* ============================================================================
+ * TITLE CHIP + HEADINGS
+ * ========================================================================== */
+.title-chip {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(70, 70, 70, 0.85);
+  color: #fff; font-size: 64px; font-weight: 800;
+  padding: 22px 64px; border-radius: 14px;
+  box-shadow: var(--shadow-pop);
+  z-index: 40;
+  animation: chip-in 0.5s cubic-bezier(.2,1.4,.5,1) both;
+}
+@keyframes chip-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.scene-heading {
+  position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
+  font-size: 40px; font-weight: 800; color: var(--ink);
+  text-align: center; width: 92%;
+  text-shadow: 0 2px 0 rgba(255,255,255,0.6);
+  animation: drop-in 0.5s ease both;
+}
+@keyframes drop-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-18px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ============================================================================
+ * HANDSPAN  (the reusable "{" unit)
+ * ========================================================================== */
+.handspan {
+  position: relative;
+  display: inline-block;
+  vertical-align: bottom;
+  transition: opacity 0.35s ease, transform 0.25s ease;
+}
+.handspan__hand {
+  /* hand.png has ~31% transparent side padding; scale the image up so the
+     VISIBLE hand fills the box width. Tiling boxes edge-to-edge then makes
+     the hands touch with no gaps (1 / 0.689 ≈ 145%). */
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: 145%; height: auto; display: block;
+  filter: drop-shadow(0 6px 6px rgba(80,40,10,0.28));
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* guide: dimmed but clearly visible (inviting to tap / shows the slot) */
+.handspan[data-variant="guide"] .handspan__hand { opacity: 0.5; }
+/* solid: a placed / confirmed handspan */
+.handspan[data-variant="solid"] .handspan__hand { opacity: 1; }
+/* faded impression left behind after a placement */
+.handspan[data-variant="faded"] .handspan__hand { opacity: 0.4; }
+/* impression used in the wrong-demo */
+.handspan[data-variant="impression"] .handspan__hand { opacity: 0.45; }
+
+/* number badge above a handspan (grey chip, like the PDF) */
+.handspan__num {
+  position: absolute; left: 50%; top: -34px; transform: translateX(-50%);
+  min-width: 30px; height: 30px; padding: 0 6px;
+  background: #5c5c5c; color: #fff; font-weight: 800; font-size: 18px;
+  border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+}
+.handspan__num.pop { animation: badge-pop 0.35s cubic-bezier(.2,1.5,.5,1) both; }
+@keyframes badge-pop {
+  from { opacity: 0; transform: translateX(-50%) scale(0.3) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+
+/* a single flying handspan during the measure phase */
+.fly-span {
+  position: absolute; z-index: 25; pointer-events: none;
+}
+
+/* ============================================================================
+ * MEASURING LANE / STRIP
+ * ========================================================================== */
+.measure-lane {
+  display: flex; align-items: flex-end; gap: 0;
+  position: relative;
+}
+.measure-row { display: flex; align-items: flex-end; gap: 0; }
+.measure-tick {
+  width: 4px; align-self: stretch; min-height: 86px;
+  background: #1d1d1d; border-radius: 3px;
+  margin-bottom: -2px;
+}
+
+/* ============================================================================
+ * TABLE
+ * ========================================================================== */
+.table { position: relative; }
+.table__img {
+  width: 100%; height: 100%; display: block;
+  filter: drop-shadow(0 18px 18px rgba(60,30,10,0.22));
+  pointer-events: none;
+}
+.table--glow::after {
+  content: ""; position: absolute; inset: -6% -4%;
+  border-radius: 24px;
+  box-shadow: 0 0 0 4px rgba(255,210,74,0.9), 0 0 50px 14px rgba(255,210,74,0.65);
+  animation: glow-pulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes glow-pulse {
+  0%,100% { opacity: 0.55; transform: scale(1); }
+  50%     { opacity: 1; transform: scale(1.015); }
+}
+
+/* ============================================================================
+ * 3D CAROUSEL (table selection)
+ * ========================================================================== */
+.carousel {
+  position: absolute; inset: 0;
+  z-index: 10;
+}
+
+.carousel__slot {
+  position: absolute; left: 50%; top: 53%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.7s cubic-bezier(.3,1.1,.4,1), opacity 0.7s ease, filter 0.7s ease;
+}
+.carousel__slot .table { transition: transform 0.5s ease; }
+
+/* front (selectable) — centred, takes the central area */
+.carousel__slot--front {
+  z-index: 5;
+  transform: translate(-50%, -50%) scale(1.0);
+  cursor: pointer;
+  animation: float-soft 3.2s ease-in-out infinite;
+}
+.carousel__slot--front .table { filter: drop-shadow(0 22px 24px rgba(60,30,10,0.32)); }
+.carousel__slot--front:hover { animation-play-state: paused; transform: translate(-50%, -50%) scale(1.05); }
+
+/* back-left + back-right glimpses — close to the central table */
+.carousel__slot--left {
+  z-index: 2; left: 26%;
+  transform: translate(-50%, -50%) scale(0.52);
+  opacity: 0.6; filter: blur(2.5px);
+}
+.carousel__slot--right {
+  z-index: 3; left: 74%;
+  transform: translate(-50%, -50%) scale(0.52);
+  opacity: 0.6; filter: blur(2.5px);
+}
+
+/* ============================================================================
+ * HALL CAROUSEL (pick-a-table-to-measure)
+ * ========================================================================== */
+.hall-carousel { position: absolute; inset: 0; z-index: 10; }
+.hall-card {
+  position: absolute; left: 50%; top: 54%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.5s cubic-bezier(.3,1.1,.4,1), opacity 0.5s ease, filter 0.5s ease, left 0.5s cubic-bezier(.3,1.1,.4,1);
+  cursor: pointer;
+}
+.hall-card.is-center { z-index: 5; transform: translate(-50%, -50%) scale(1); animation: float-soft 3.2s ease-in-out infinite; }
+.hall-card.is-left   { z-index: 2; left: 15%; transform: translate(-50%, -50%) scale(0.5); opacity: 0.6; filter: blur(2.5px); }
+.hall-card.is-right  { z-index: 3; left: 85%; transform: translate(-50%, -50%) scale(0.5); opacity: 0.6; filter: blur(2.5px); }
+/* side tables lift toward the player on hover so they read as interactive */
+.hall-card.is-left:not(.hall-card--done):hover  { transform: translate(-50%, -50%) scale(0.6); opacity: 0.92; filter: blur(0.5px); }
+.hall-card.is-right:not(.hall-card--done):hover { transform: translate(-50%, -50%) scale(0.6); opacity: 0.92; filter: blur(0.5px); }
+
+/* a measured table is disabled (greyed) and shows its length */
+.hall-card--done { filter: grayscale(0.9) brightness(0.78); cursor: default; }
+.hall-card--done.is-center { animation: none; }
+.hall-card__done {
+  position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%);
+  background: #3a2152; color: var(--yellow); font-weight: 800; font-size: 22px;
+  padding: 6px 18px; border-radius: 12px; white-space: nowrap;
+  box-shadow: var(--shadow-soft);
+}
+
+.hall-arrow {
+  position: absolute; top: 54%; transform: translateY(-50%);
+  z-index: 20; width: 76px; height: 76px; border-radius: 50%;
+  border: none; cursor: pointer; color: #fff;
+  font-size: 50px; font-weight: 800; line-height: 1; padding-bottom: 8px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, var(--purple-3), var(--purple-1));
+  box-shadow: 0 6px 0 #5a157a, var(--shadow-soft);
+  transition: transform 0.12s ease, filter 0.15s ease;
+}
+.hall-arrow--left { left: 36px; }
+.hall-arrow--right { right: 36px; }
+.hall-arrow:hover { filter: brightness(1.1); }
+.hall-arrow:active { transform: translateY(-50%) scale(0.92); box-shadow: 0 3px 0 #5a157a, var(--shadow-soft); }
+
+/* full-body genie on the feedback screens (success / wrong / clue) */
+.feedback-gogo {
+  position: absolute; z-index: 15; pointer-events: none;
+  filter: drop-shadow(0 12px 16px rgba(0,0,0,0.28));
+  animation: float-char 3.6s ease-in-out infinite;
+}
+.feedback-gogo--left { left: 24px; }
+.feedback-gogo--right { right: 24px; }
+/* Per-image sizing: the success gif is tightly cropped (much taller per px) so
+   it gets a smaller width to read as the SAME character size as the others.
+   Each genie is lifted (bottom offset) so its head sits just under the bubble. */
+.feedback-gogo--success { width: 200px; bottom: 170px; }
+.feedback-gogo--wrong   { width: 320px; bottom: 205px; }
+.feedback-gogo--clue    { width: 320px; bottom: 200px; }
+
+/* numbered circle under a measured handspan (clue / success) */
+.track-num {
+  min-width: 36px; height: 36px; padding: 0 5px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, var(--purple-3), var(--purple-1));
+  color: #fff; font-weight: 800; font-size: 19px;
+  border: 3px solid var(--yellow); border-radius: 999px;
+  box-shadow: var(--shadow-soft); z-index: 23;
+}
+
+/* success: the found table + its markers */
+.hall-found { z-index: 5; }
+.hall-found .marker-strip {
+  position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%); display: flex;
+}
+
+/* top + bottom darkening so the central highlighted table pops */
+.carousel-vignette {
+  position: absolute; inset: 0; z-index: 6; pointer-events: none;
+  background: linear-gradient(180deg,
+    rgba(0,0,0,0.42) 0%,
+    rgba(0,0,0,0) 27%,
+    rgba(0,0,0,0) 73%,
+    rgba(0,0,0,0.42) 100%);
+}
+
+.select-glow {
+  position: absolute; left: 50%; top: 52%; transform: translate(-50%,-50%);
+  width: 400px; height: 220px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255,221,120,0.42), transparent 72%);
+  filter: blur(8px);
+  z-index: 4;
+  animation: glow-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes float-soft {
+  0%,100% { transform: translate(-50%, -50%) translateY(0); }
+  50%     { transform: translate(-50%, -50%) translateY(-14px); }
+}
+
+/* ============================================================================
+ * SPEECH BUBBLES
+ * ========================================================================== */
+.bubble {
+  position: relative;
+  max-width: 520px;
+  background: linear-gradient(180deg, #fbf3ff 0%, #f3e6ff 100%);
+  border: 4px solid var(--yellow);
+  border-radius: 22px;
+  padding: 18px 24px;
+  box-shadow: var(--shadow-pop);
+  color: var(--ink);
+  animation: bubble-pop 0.4s cubic-bezier(.2,1.4,.5,1) both;
+}
+/* Purple speech panel — colours sampled from the PanelwGogo artwork
+   (#600186 → #9C109F → #BE1BFF), with the brand yellow border. */
+.bubble--purple, .bubble[data-tone="purple"] {
+  background: linear-gradient(160deg, #BE1BFF 0%, #9C109F 48%, #600186 100%);
+  color: #fff;
+  border-color: var(--yellow);
+}
+.bubble--purple .bubble__text { color: #fff; }
+.bubble__speaker {
+  font-weight: 800; font-size: 22px; color: var(--purple-1); margin-bottom: 4px;
+}
+.bubble__text { font-weight: 700; font-size: 26px; line-height: 1.25; min-height: 1.2em; }
+.bubble__tail {
+  position: absolute; bottom: -16px; left: 48px;
+  width: 34px; height: 24px;
+  background: inherit;
+  border-bottom: 4px solid var(--yellow);
+  border-right: 4px solid var(--yellow);
+  border-bottom-right-radius: 8px;
+  transform: skewX(-12deg) rotate(8deg);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.bubble[data-side="right"] .bubble__tail { left: auto; right: 48px; }
+@keyframes bubble-pop {
+  from { opacity: 0; transform: scale(0.6) translateY(14px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ============================================================================
+ * CHARACTERS
+ * ========================================================================== */
+.char { position: absolute; z-index: 15; }
+.char--gogo { width: 260px; }
+.char--gogo .char__img {
+  width: 100%; display: block;
+  filter: drop-shadow(0 16px 18px rgba(0,0,0,0.28));
+  animation: float-char 3.4s ease-in-out infinite;
+}
+@keyframes float-char { 0%,100%{ transform: translateY(0) rotate(-1deg);} 50%{ transform: translateY(-16px) rotate(1deg);} }
+
+/* Gogo's Santa-style sack (CSS) */
+.gogo-sack {
+  position: absolute; right: -42px; top: 40px;
+  width: 130px; height: 150px;
+  background: radial-gradient(120% 120% at 30% 20%, #c0392b, #922b21);
+  border-radius: 40% 40% 46% 46% / 52% 52% 48% 48%;
+  box-shadow: inset -10px -12px 24px rgba(0,0,0,0.35), var(--shadow-soft);
+  transform: rotate(8deg);
+}
+.gogo-sack__tie {
+  position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+  width: 70px; height: 22px; background: #6e2018; border-radius: 12px;
+}
+
+/* CSS Princess "Tara" */
+.char--tara { width: 220px; }
+.tara { position: relative; width: 220px; height: 320px; animation: float-char 3.8s ease-in-out infinite; }
+.tara__crown {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  width: 86px; height: 40px;
+  background:
+    conic-gradient(from -90deg at 20% 100%, var(--yellow) 0 25%, transparent 0),
+    conic-gradient(from -90deg at 50% 100%, var(--yellow) 0 25%, transparent 0),
+    conic-gradient(from -90deg at 80% 100%, var(--yellow) 0 25%, transparent 0);
+  clip-path: polygon(0 100%, 12% 30%, 28% 75%, 50% 12%, 72% 75%, 88% 30%, 100% 100%);
+  background: var(--yellow);
+  filter: drop-shadow(0 3px 4px rgba(0,0,0,0.25));
+  z-index: 6;
+}
+.tara__hair {
+  position: absolute; top: 34px; left: 50%; transform: translateX(-50%);
+  width: 150px; height: 130px; background: #5a3520; border-radius: 50% 50% 46% 46%;
+  z-index: 2;
+}
+.tara__hair-side { position: absolute; top: 70px; width: 46px; height: 180px; background: #5a3520; border-radius: 30px; z-index: 1; }
+.tara__hair-side--l { left: 8px; transform: rotate(6deg); }
+.tara__hair-side--r { right: 8px; transform: rotate(-6deg); }
+.tara__face {
+  position: absolute; top: 54px; left: 50%; transform: translateX(-50%);
+  width: 116px; height: 122px; background: #f7c9a4; border-radius: 50%;
+  z-index: 4;
+}
+.tara__eye { position: absolute; top: 52px; width: 16px; height: 22px; background: #2a2235; border-radius: 50%; }
+.tara__eye--l { left: 30px; } .tara__eye--r { right: 30px; }
+.tara__eye::after { content:""; position:absolute; top:3px; right:3px; width:6px; height:6px; background:#fff; border-radius:50%; }
+.tara__cheek { position: absolute; top: 74px; width: 20px; height: 12px; background: #ff9eb0; border-radius: 50%; opacity: 0.75; }
+.tara__cheek--l { left: 18px; } .tara__cheek--r { right: 18px; }
+.tara__smile { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); width: 40px; height: 20px; border-bottom: 5px solid #b5532f; border-radius: 0 0 40px 40px; }
+.tara__dress {
+  position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
+  width: 170px; height: 170px;
+  background: linear-gradient(180deg, #d6219e, #a3147a);
+  clip-path: polygon(34% 0, 66% 0, 100% 100%, 0 100%);
+  z-index: 3;
+  box-shadow: inset 0 -10px 20px rgba(0,0,0,0.18);
+}
+.tara__dress::after {
+  content: ""; position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  width: 8px; height: 120px; background: var(--yellow); opacity: 0.85;
+}
+
+/* ============================================================================
+ * SCENE LAYOUT HELPERS
+ * ========================================================================== */
+.center-col {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 24px;
+}
+.stack-bottom {
+  position: absolute; left: 0; right: 0; bottom: 40px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* selectable handspan tray (guess phase) */
+.guess-tray {
+  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+  display: flex; gap: 8px; z-index: 20; padding: 10px;
+}
+.guess-cell { cursor: pointer; transition: transform 0.15s ease; }
+.guess-cell:hover { transform: translateY(-6px) scale(1.05); }
+.guess-cell[data-selected="1"] { transform: translateY(-4px); }
+/* guided first flow: the correct cell glows so the player taps the right number */
+.guess-cell--hint .handspan { animation: cell-hint 1.05s ease-in-out infinite; }
+@keyframes cell-hint {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 213, 74, 0.35)); }
+  50%      { filter: drop-shadow(0 0 16px rgba(255, 213, 74, 1)) drop-shadow(0 0 7px rgba(255, 213, 74, 0.9)); }
+}
+
+/* hand-cursor nudge */
+.hand-nudge {
+  position: absolute; width: 70px; z-index: 28; pointer-events: none;
+  animation: tap-bounce 1.2s ease-in-out infinite;
+}
+.hand-nudge img { width: 100%; display: block; }
+@keyframes tap-bounce {
+  0%,100% { transform: translateY(0) scale(1); }
+  50%     { transform: translateY(8px) scale(0.94); }
+}
+
+/* tap-gesture nudge: pops in, then presses (used over the table to select) */
+.hand-nudge--tap {
+  width: 140px;
+  transform-origin: 30% 20%;
+  animation: tap-pop 1.5s ease-in-out infinite;
+}
+@keyframes tap-pop {
+  0%   { transform: scale(0.3); opacity: 0; }
+  16%  { transform: scale(1.12); opacity: 1; }
+  28%  { transform: scale(1); }
+  44%  { transform: scale(0.82) translate(4px, 6px); }  /* press down */
+  60%  { transform: scale(1); }                          /* release */
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* dialogue scene rug/table row for the final selection */
+.select-row {
+  position: absolute; left: 0; right: 0; bottom: 70px;
+  display: flex; align-items: flex-end; justify-content: center; gap: 60px;
+  z-index: 12;
+}
+.select-table { position: relative; cursor: pointer; transition: transform 0.2s ease, filter 0.2s ease; }
+.select-table:hover { transform: translateY(-10px) scale(1.04); filter: brightness(1.04); }
+.select-table .marker-strip {
+  position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%);
+  display: flex;
+}
+.select-table--wrong .table__img { filter: drop-shadow(0 0 0 #ff5252) brightness(1.05); }
+.select-table--wrong::after {
+  content: ""; position: absolute; inset: -8px -6px 24px;
+  border-radius: 18px;
+  box-shadow: 0 0 0 4px #ff5b5b, 0 0 30px 6px rgba(255,80,80,0.6);
+  pointer-events: none;
+}
+
+/* ============================================================================
+ * TUTORIAL FLOW COMPONENTS (mapped from Figma, ratios preserved on 1280x720)
+ * ========================================================================== */
+
+/* --- avatar speech bubble: round head + purple bar + tail --------------- */
+.tbubble {
+  position: absolute; z-index: 30;
+  display: flex; align-items: center;
+}
+.tbubble__avatar {
+  width: 90px; height: 90px; flex: 0 0 auto;
+  margin-right: -22px; z-index: 2;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+}
+.tbubble__avatar img { width: 100%; height: 100%; display: block; border-radius: 50%; }
+.tbubble__bar {
+  position: relative;
+  min-height: 78px;
+  display: flex; align-items: center;
+  padding: 10px 34px 10px 40px;
+  background: linear-gradient(160deg, #BE1BFF 0%, #9C109F 48%, #600186 100%);
+  border: 4px solid var(--yellow);
+  border-radius: 22px;
+  box-shadow: var(--shadow-pop);
+}
+.tbubble__text {
+  color: #fef6f6; font-weight: 800; font-size: 33px; line-height: 1.12;
+  white-space: nowrap; letter-spacing: 0.3px;
+}
+.tbubble__tail {
+  position: absolute; left: 46px; bottom: -16px;
+  width: 0; height: 0;
+  border-left: 16px solid transparent;
+  border-right: 16px solid transparent;
+  border-top: 20px solid #7a0f9a;
+  filter: drop-shadow(0 3px 0 var(--yellow));
+}
+
+/* --- big welcome panel (genie) ------------------------------------------ */
+.welcome-panel {
+  position: absolute; left: 50%; top: 78px; transform: translateX(-50%);
+  z-index: 30;
+  max-width: 700px; min-height: 92px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 14px 46px;
+  background: linear-gradient(160deg, #BE1BFF 0%, #9C109F 48%, #600186 100%);
+  border: 5px solid var(--yellow);
+  border-radius: 26px;
+  box-shadow: var(--shadow-pop);
+  /* centred via translateX(-50%); use a pop that preserves it */
+  animation: panel-pop 0.4s cubic-bezier(.2,1.4,.5,1) both;
+}
+@keyframes panel-pop {
+  from { opacity: 0; transform: translateX(-50%) scale(0.7); }
+  to   { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+.welcome-panel__text {
+  color: #fff; font-weight: 800; font-size: 42px; text-align: center; line-height: 1.1;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.18);
+}
+.welcome-panel__tail {
+  position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 22px solid transparent;
+  border-right: 22px solid transparent;
+  border-top: 26px solid #7a0f9a;
+  filter: drop-shadow(0 4px 0 var(--yellow));
+}
+
+/* --- compact feedback bubble (success / try-again / clue screens) -------- *
+ * Smaller than the welcome panel and anchored to the genie's side, with its
+ * tail pointing DOWN at the genie so it reads as the genie speaking.        */
+.fb-bubble {
+  position: absolute; top: 60px; z-index: 30;
+  max-width: 430px; min-height: 60px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 14px 30px;
+  background: linear-gradient(160deg, #BE1BFF 0%, #9C109F 48%, #600186 100%);
+  border: 5px solid var(--yellow);
+  border-radius: 24px;
+  box-shadow: var(--shadow-pop);
+  animation: bubble-pop 0.4s cubic-bezier(.2,1.4,.5,1) both;
+}
+.fb-bubble--left  { left: 40px; }
+.fb-bubble--right { right: 40px; }
+.fb-bubble__text {
+  color: #fff; font-weight: 800; font-size: 28px; text-align: center; line-height: 1.18;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.18);
+}
+.fb-bubble__tail {
+  position: absolute; bottom: -22px; width: 0; height: 0;
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  border-top: 24px solid #7a0f9a;
+  filter: drop-shadow(0 4px 0 var(--yellow));
+}
+.fb-bubble--left  .fb-bubble__tail { left: 128px; }
+.fb-bubble--right .fb-bubble__tail { right: 128px; }
+
+/* --- orange hand unit (handspan) ---------------------------------------- */
+.hand-unit { position: absolute; width: 127px; height: 127px; z-index: 22; }
+/* scale the image up so the VISIBLE hand fills the box width -> placing
+   boxes one box-width apart makes the hands touch with no gaps (~145%). */
+.hand-unit img {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 145%; height: auto; display: block;
+  filter: drop-shadow(0 6px 6px rgba(80,40,10,0.28));
+}
+.hand-unit.is-faded { opacity: 0.38; }
+.hand-unit.is-wrong img { filter: drop-shadow(0 0 10px rgba(255,70,70,0.9)); }
+
+/* --- hand on holographic podium (the draggable source) ------------------ */
+.hand-podium { position: absolute; width: 200px; height: 250px; z-index: 24; }
+.hand-podium__disc {
+  position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+  width: 168px; height: 52px; border-radius: 50%;
+  background: radial-gradient(closest-side, #c98bff 0%, #8a3fd6 55%, #5e1f9e 100%);
+  box-shadow: 0 0 26px 6px rgba(170,90,240,0.7);
+  border: 3px solid rgba(255,255,255,0.5);
+}
+.hand-podium__glow {
+  position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
+  width: 120px; height: 150px;
+  background: linear-gradient(0deg, rgba(190,110,255,0.55), rgba(190,110,255,0) 80%);
+  filter: blur(6px);
+  animation: glow-pulse 1.8s ease-in-out infinite;
+}
+.hand-podium__hand {
+  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+  width: 112px; height: 112px;
+  animation: float-hand 2.4s ease-in-out infinite;
+}
+@keyframes float-hand { 0%,100%{ transform: translateX(-50%) translateY(0);} 50%{ transform: translateX(-50%) translateY(-10px);} }
+
+/* --- dashed start/end measurement guides -------------------------------- */
+.measure-guide__line {
+  position: absolute; width: 0; z-index: 18;
+  border-left: 4px dashed #e11dff;
+  filter: drop-shadow(0 0 3px rgba(225,29,255,0.5));
+  /* hidden until revealed (grows downward) with an SFX */
+  transform: scaleY(0); transform-origin: top center; opacity: 0;
+}
+.measure-guide__line.is-in {
+  animation: guide-drop 0.45s cubic-bezier(.2,1.1,.4,1) forwards;
+}
+@keyframes guide-drop {
+  0%   { transform: scaleY(0); opacity: 0; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+
+/* --- spotlight vignette: darkens periphery, central table/hands pop ------ */
+.tut-vignette {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background:
+    radial-gradient(42% 42% at 50% 46%, rgba(255,255,255,0.10), rgba(255,255,255,0) 60%),
+    radial-gradient(60% 62% at 50% 48%, rgba(0,0,0,0) 32%, rgba(0,0,0,0.34) 70%, rgba(0,0,0,0.60) 100%);
+  animation: vignette-in 0.6s ease both;
+}
+@keyframes vignette-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* --- small call-out label chip ------------------------------------------ */
+.label-chip {
+  position: absolute; z-index: 26;
+  display: inline-flex; align-items: center;
+  padding: 8px 22px;
+  background: linear-gradient(160deg, #BE1BFF 0%, #7C229F 100%);
+  border: 4px solid var(--yellow);
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+  animation: bubble-pop 0.35s cubic-bezier(.2,1.4,.5,1) both;
+}
+.label-chip span { color: #fff; font-weight: 800; font-size: 30px; white-space: nowrap; }
+.label-chip__tail {
+  position: absolute; left: 50%; bottom: -15px; transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+  border-top: 17px solid #8a1aa8;
+  filter: drop-shadow(0 2px 0 var(--yellow));
+}
+
+/* blurred backdrop used on the welcome screens */
+.tut-blur { filter: blur(7px) brightness(0.92); }
+
+/* ============================================================================
+ * SPOTLIGHT (blur + dim overlay for tutorial focus)
+ * ========================================================================== */
+.spotlight {
+  position: absolute; inset: 0; z-index: 45;
+  background: rgba(27, 27, 27, 0.80);
+  backdrop-filter: blur(8.65px);
+  -webkit-backdrop-filter: blur(8.65px);
+  opacity: 0.4;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+/* element promoted above the spotlight */
+.spot-on { position: relative; z-index: 46 !important; }
+
+/* ============================================================================
+ * PARTICLES
+ * ========================================================================== */
+.p-spark {
+  position: absolute; border-radius: 2px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  animation: spark-fly linear forwards;
+  box-shadow: 0 0 8px currentColor;
+}
+@keyframes spark-fly {
+  0%   { opacity: 1; transform: translate(-50%,-50%) rotate(45deg) scale(1); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(180deg) scale(0.2); }
+}
+.p-ring {
+  position: absolute; width: 20px; height: 20px; border-radius: 50%;
+  border: 4px solid #FFD54A; transform: translate(-50%,-50%);
+  animation: ring-grow 0.65s ease-out forwards;
+}
+@keyframes ring-grow {
+  0%   { opacity: 0.9; width: 20px; height: 20px; }
+  100% { opacity: 0; width: 320px; height: 320px; }
+}
+.p-confetti {
+  position: absolute; top: -20px;
+  animation: confetti-fall linear forwards;
+}
+@keyframes confetti-fall {
+  0%   { opacity: 1; transform: translate(0,0) rotate(0); }
+  100% { opacity: 0.9; transform: translate(var(--drift), var(--fall)) rotate(var(--spin)); }
+}
+.p-floatstar {
+  position: absolute; transform: translate(-50%,-50%);
+  animation: floatstar-rise 1.6s ease-out forwards;
+  text-shadow: 0 0 10px currentColor;
+}
+@keyframes floatstar-rise {
+  0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.4); }
+  30%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%,-180%) scale(1.2) rotate(40deg); }
+}
+
+/* ============================================================================
+ * MICRO ANIMATIONS
+ * ========================================================================== */
+.anim-shake { animation: shake 0.5s ease; }
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  15% { transform: translateX(-10px) rotate(-2deg); }
+  30% { transform: translateX(10px) rotate(2deg); }
+  45% { transform: translateX(-8px) rotate(-1.5deg); }
+  60% { transform: translateX(8px) rotate(1.5deg); }
+  75% { transform: translateX(-4px); }
+}
+.anim-pulse { animation: pulse 0.5s ease; }
+@keyframes pulse {
+  0%,100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+/* generic fade/slide entrance utility */
+.enter-fade { animation: enter-fade 0.5s ease both; }
+@keyframes enter-fade { from { opacity: 0; } to { opacity: 1; } }
+.enter-up { animation: enter-up 0.5s cubic-bezier(.2,1,.4,1) both; }
+@keyframes enter-up { from { opacity: 0; transform: translateY(30px);} to { opacity:1; transform: translateY(0);} }
+
+/* overlay panels (Oops / Well Done) */
+.overlay {
+  position: absolute; inset: 0; z-index: 70;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 26px;
+  background: rgba(20, 12, 34, 0.45);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: enter-fade 0.3s ease both;
+}
+.overlay__title {
+  font-size: 72px; font-weight: 800; color: #fff;
+  text-shadow: 0 6px 0 rgba(0,0,0,0.25), 0 12px 28px rgba(0,0,0,0.4);
+}
+.overlay__title--ok { color: #aef5b8; }
+.overlay__title--bad { color: #ffd24a; }
+.overlay__sub { font-size: 30px; font-weight: 700; color: #fff; text-align: center; max-width: 70%; }
