@@ -36,10 +36,17 @@ HS.Tutorial = (function () {
   var el = UI.el;
 
   /* ---- geometry (1920x1080 Figma -> 1280x720 stage, x2/3) -------------- */
-  var TABLE = { left: 354, top: 179, w: 572, h: 302 };
-  // Guides sit on the table's OUTER leg-foot edges (measured opaque: Table.svg
-  // feet span 2.88%..96.63% of its width): 354 + 572*0.0288 ≈ 370, 354 + 572*0.9663 ≈ 907.
-  var GUIDE = { startX: 370, endX: 907, top: 466, h: 98 };
+  // The tutorial uses the GREEN table (Table2.svg, the 5-handspan table). Its
+  // art is taller per width than the brown table, so the table extends further
+  // up while its base stays on the same floor line (bottom ≈ 481).
+  var TABLE_SRC = 'assets/Table2.svg';
+  var TABLE_RATIO = 335 / 567;
+  // top stays ~179 (as the brown table used): Table2's taller wrap has bottom
+  // padding, so its visible legs land right on the guide line at this anchor.
+  var TABLE = { left: 354, top: 179, w: 572, h: 338 };
+  // Guides sit on the table's OUTER leg-foot edges (Table2.svg feet span
+  // 5.5%..94% of its width): 354 + 572*0.055 ≈ 385, 354 + 572*0.940 ≈ 892.
+  var GUIDE = { startX: 385, endX: 892, top: 466, h: 98 };
   // The visible hand now fills the box width, so the box width IS the flush
   // hand width — placing boxes one box-width apart makes the hands touch.
   var HAND_BOX = 88;
@@ -125,7 +132,7 @@ HS.Tutorial = (function () {
         // darken the periphery so the central table + hands read clearly
         s.appendChild(UI.Vignette());
 
-        var table = UI.Table({ w: TABLE.w });
+        var table = UI.Table({ w: TABLE.w, src: TABLE_SRC, ratio: TABLE_RATIO });
         Object.assign(table.style, { position: 'absolute', left: TABLE.left + 'px', top: TABLE.top + 'px', zIndex: '5' });
         s.appendChild(table);
         s._table = table;

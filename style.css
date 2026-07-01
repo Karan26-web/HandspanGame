@@ -97,17 +97,14 @@ html, body {
  * ========================================================================== */
 .boot {
   position: fixed; inset: 0; z-index: 200;
-  display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(120% 120% at 50% 30%, #3a1d5c, #160d28 70%);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 7vh;
+  background: #160d28 url('assets/PreLBD.png') center center / cover no-repeat;
 }
 .boot.hidden { display: none; }
 .boot__card { text-align: center; animation: float-bob 3.6s ease-in-out infinite; }
 @keyframes float-bob { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-12px);} }
-.boot__title {
-  font-size: 72px; font-weight: 800; color: #fff; letter-spacing: 1px;
-  text-shadow: 0 6px 0 rgba(123,31,162,0.6), 0 14px 30px rgba(0,0,0,0.5);
-}
-.boot__hint { color: #f0d9ff; font-size: 24px; margin: 6px 0 34px; font-weight: 600; }
+.boot__btn { font-size: 34px; padding: 16px 60px; }
 
 /* ============================================================================
  * BUTTONS
@@ -279,71 +276,64 @@ html, body {
   filter: drop-shadow(0 18px 18px rgba(60,30,10,0.22));
   pointer-events: none;
 }
-.table--glow::after {
-  content: ""; position: absolute; inset: -6% -4%;
-  border-radius: 24px;
-  box-shadow: 0 0 0 4px rgba(255,210,74,0.9), 0 0 50px 14px rgba(255,210,74,0.65);
-  animation: glow-pulse 1.6s ease-in-out infinite;
+/* Centre-table highlight: glowing L-shaped CORNER BRACKETS framing the table
+   (instead of a full square) ... */
+.table--glow::before {
+  content: ""; position: absolute; inset: -9% -5%;
+  --b: 7px;    /* bracket thickness */
+  --l: 48px;   /* bracket arm length */
+  background:
+    linear-gradient(var(--purple-3), var(--purple-3)) top left     / var(--l) var(--b) no-repeat,
+    linear-gradient(var(--purple-3), var(--purple-3)) top left     / var(--b) var(--l) no-repeat,
+    linear-gradient(var(--purple-3), var(--purple-3)) top right    / var(--l) var(--b) no-repeat,
+    linear-gradient(var(--purple-3), var(--purple-3)) top right    / var(--b) var(--l) no-repeat,
+    linear-gradient(var(--purple-3), var(--purple-3)) bottom left  / var(--l) var(--b) no-repeat,
+    linear-gradient(var(--purple-3), var(--purple-3)) bottom left  / var(--b) var(--l) no-repeat,
+    linear-gradient(var(--purple-3), var(--purple-3)) bottom right / var(--l) var(--b) no-repeat,
+    linear-gradient(var(--purple-3), var(--purple-3)) bottom right / var(--b) var(--l) no-repeat;
+  filter: drop-shadow(0 0 8px rgba(155,39,176,0.9));
+  animation: glow-pulse 1.7s ease-in-out infinite;
   pointer-events: none;
 }
 @keyframes glow-pulse {
-  0%,100% { opacity: 0.55; transform: scale(1); }
-  50%     { opacity: 1; transform: scale(1.015); }
+  0%,100% { opacity: 0.6; transform: scale(1); }
+  50%     { opacity: 1; transform: scale(1.03); }
 }
 
 /* ============================================================================
  * 3D CAROUSEL (table selection)
  * ========================================================================== */
-.carousel {
-  position: absolute; inset: 0;
-  z-index: 10;
-}
-
-.carousel__slot {
-  position: absolute; left: 50%; top: 53%;
-  transform: translate(-50%, -50%);
-  transition: transform 0.7s cubic-bezier(.3,1.1,.4,1), opacity 0.7s ease, filter 0.7s ease;
-}
-.carousel__slot .table { transition: transform 0.5s ease; }
-
-/* front (selectable) — centred, takes the central area */
-.carousel__slot--front {
-  z-index: 5;
-  transform: translate(-50%, -50%) scale(1.0);
-  cursor: pointer;
-  animation: float-soft 3.2s ease-in-out infinite;
-}
-.carousel__slot--front .table { filter: drop-shadow(0 22px 24px rgba(60,30,10,0.32)); }
-.carousel__slot--front:hover { animation-play-state: paused; transform: translate(-50%, -50%) scale(1.05); }
-
-/* back-left + back-right glimpses — close to the central table */
-.carousel__slot--left {
-  z-index: 2; left: 26%;
-  transform: translate(-50%, -50%) scale(0.52);
-  opacity: 0.6; filter: blur(2.5px);
-}
-.carousel__slot--right {
-  z-index: 3; left: 74%;
-  transform: translate(-50%, -50%) scale(0.52);
-  opacity: 0.6; filter: blur(2.5px);
-}
-
 /* ============================================================================
- * HALL CAROUSEL (pick-a-table-to-measure)
+ * HALL CAROUSEL — used for BOTH the intro table-select and the pick-a-table
+ * (measure) screen, so they look & behave identically.
  * ========================================================================== */
 .hall-carousel { position: absolute; inset: 0; z-index: 10; }
 .hall-card {
   position: absolute; left: 50%; top: 54%;
   transform: translate(-50%, -50%);
-  transition: transform 0.5s cubic-bezier(.3,1.1,.4,1), opacity 0.5s ease, filter 0.5s ease, left 0.5s cubic-bezier(.3,1.1,.4,1);
-  cursor: pointer;
+  /* smooth 400ms ease-in-out cross-fade of position, depth-blur & brightness */
+  transition: transform 0.42s cubic-bezier(.3,1.05,.4,1), opacity 0.42s ease, filter 0.42s ease, left 0.42s cubic-bezier(.3,1.05,.4,1);
+  cursor: pointer; will-change: transform, filter, opacity;
 }
-.hall-card.is-center { z-index: 5; transform: translate(-50%, -50%) scale(1); animation: float-soft 3.2s ease-in-out infinite; }
-.hall-card.is-left   { z-index: 2; left: 15%; transform: translate(-50%, -50%) scale(0.5); opacity: 0.6; filter: blur(2.5px); }
-.hall-card.is-right  { z-index: 3; left: 85%; transform: translate(-50%, -50%) scale(0.5); opacity: 0.6; filter: blur(2.5px); }
+/* SELECTED table — sharp, a touch brighter, lifted forward with a soft shadow */
+.hall-card.is-center {
+  z-index: 5;
+  transform: translate(-50%, -50%) scale(1);
+  filter: brightness(1.06) drop-shadow(0 22px 26px rgba(45,22,6,0.42));
+}
+/* NON-selected tables recede: smaller, blurred, dimmed, desaturated, no glow */
+.hall-card.is-left, .hall-card.is-right {
+  opacity: 0.5;
+  filter: blur(3px) brightness(0.55) saturate(0.7) grayscale(0.12);
+}
+.hall-card.is-left  { z-index: 2; left: 15%; transform: translate(-50%, -50%) scale(0.48); }
+.hall-card.is-right { z-index: 3; left: 85%; transform: translate(-50%, -50%) scale(0.48); }
 /* side tables lift toward the player on hover so they read as interactive */
-.hall-card.is-left:not(.hall-card--done):hover  { transform: translate(-50%, -50%) scale(0.6); opacity: 0.92; filter: blur(0.5px); }
-.hall-card.is-right:not(.hall-card--done):hover { transform: translate(-50%, -50%) scale(0.6); opacity: 0.92; filter: blur(0.5px); }
+.hall-card.is-left:not(.hall-card--done):hover,
+.hall-card.is-right:not(.hall-card--done):hover {
+  opacity: 0.9; filter: blur(1px) brightness(0.85) saturate(0.9);
+  transform: translate(-50%, -50%) scale(0.55);
+}
 
 /* a measured table is disabled (greyed) and shows its length */
 .hall-card--done { filter: grayscale(0.9) brightness(0.78); cursor: default; }
@@ -411,14 +401,62 @@ html, body {
     rgba(0,0,0,0.42) 100%);
 }
 
+/* Warm sunlight glow behind the selected table (soft, not neon) */
 .select-glow {
-  position: absolute; left: 50%; top: 52%; transform: translate(-50%,-50%);
-  width: 400px; height: 220px; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255,221,120,0.42), transparent 72%);
-  filter: blur(8px);
-  z-index: 4;
-  animation: glow-pulse 2s ease-in-out infinite;
-  pointer-events: none;
+  position: absolute; left: 50%; top: 55%; transform: translate(-50%,-50%);
+  width: 540px; height: 330px; border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(255,237,158,0.65), rgba(255,223,124,0.28) 45%, transparent 70%);
+  filter: blur(30px);
+  z-index: 4; pointer-events: none;
+  animation: glow-breathe 3.6s ease-in-out infinite;
+}
+@keyframes glow-breathe {
+  0%,100% { opacity: 0.82; transform: translate(-50%,-50%) scale(1); }
+  50%     { opacity: 1;    transform: translate(-50%,-50%) scale(1.04); }
+}
+
+/* ---- SPOTLIGHT LAYERS ---------------------------------------------------- *
+ * Warm, cozy theatrical lighting that focuses the eye on the selected table. */
+
+/* Layer 1+2: warm dark room + soft radial spotlight reveal on the centre, with
+ * a gentle blur/dim of the background WALL behind (depth). Sits BELOW the cards
+ * (z-1) so the tables are lit/dimmed by their own filters, not this overlay. */
+.hall-carousel::before {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  /* Soft warm vignette only — darkens the surrounding room while the lit centre
+     stays sharp & bright. No blur / no hard-edged mask (which read as an oval). */
+  background: radial-gradient(ellipse 58% 72% at 50% 50%,
+    rgba(0,0,0,0) 42%,
+    rgba(30,20,10,0.26) 64%,
+    rgba(20,13,6,0.62) 100%);
+}
+/* Layer 3: warm cone of light descending from above onto the centre table */
+.hall-carousel::after {
+  content: ""; position: absolute; left: 50%; top: -6%; transform: translateX(-50%);
+  width: 72%; height: 98%; z-index: 4; pointer-events: none;
+  background: linear-gradient(to bottom,
+    rgba(255,241,192,0.64) 0%,
+    rgba(255,234,168,0.34) 38%,
+    rgba(255,228,152,0.13) 66%,
+    transparent 92%);
+  clip-path: polygon(38% 0%, 62% 0%, 93% 100%, 7% 100%);   /* wider cone: narrow top, wide below */
+  filter: blur(12px);
+  animation: spot-breathe 3.8s ease-in-out infinite;   /* gentle pulse */
+}
+@keyframes spot-breathe { 0%,100% { opacity: 0.78; } 50% { opacity: 1; } }
+
+/* Floating dust motes drifting up through the spotlight (atmosphere) */
+.dust {
+  position: absolute; z-index: 4; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(255,242,205,0.75), transparent 70%);
+  animation: dust-float linear infinite;
+}
+@keyframes dust-float {
+  0%   { transform: translate(0,0);         opacity: 0; }
+  15%  { opacity: 0.5; }
+  85%  { opacity: 0.4; }
+  100% { transform: translate(10px,-170px); opacity: 0; }
 }
 
 @keyframes float-soft {

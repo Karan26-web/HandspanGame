@@ -30,18 +30,18 @@ HS.Game = (function () {
   // Round configuration. Tutorial=4, Round1=8, Round2=6 (per the PDF table
   // and the explicit brief). The final scene asks for the 6-handspan table.
   var CONFIG = {
-    tutorialSpans: 4,
+    tutorialSpans: 5,
     round1Spans: 8,
     round2Spans: 6,
     finalTarget: 6,
-    // table lengths in the hall (index maps to artwork in rounds.js):
-    //   0 -> wooden (Table.svg)  = 6 spans  (the target)
-    //   1 -> pink   (Table2.svg) = 5 spans
-    //   2 -> green  (Table3.svg) = 4 spans
+    // table lengths (index maps to artwork in rounds.js):
+    //   0 -> Table.svg  (brown) = 6 spans  (the target)
+    //   1 -> Table2.svg (green) = 5 spans  (used by the tutorial, then disabled)
+    //   2 -> Table3.svg (pink)  = 8 spans
     finalTables: [
       { spans: 6 },
       { spans: 5 },
-      { spans: 4 }
+      { spans: 8 }
     ]
   };
 
@@ -229,7 +229,7 @@ HS.Game = (function () {
 
     // a generous tray so the answer is never the last cell
     var trayCount = Math.max(answer + 4, 10);
-    var unit = 84;
+    var unit = 72;
     var tray = el('div.guess-tray');
     var cells = [];
     var committed = false;
@@ -241,7 +241,17 @@ HS.Game = (function () {
         var hs = UI.HandSpan({ variant: 'guide', w: unit, h: unit });
         cell.appendChild(hs);
         cell.addEventListener('click', function () { onCellTap(idx); });
-        cell.addEventListener('mouseenter', function () { if (!committed) A.playHover(); });
+        // HOVER (not tap) reveals the span number for that cell
+        cell.addEventListener('mouseenter', function () {
+          if (committed) return;
+          A.playHover();
+          UI.setHandSpan(hs, 'guide', idx + 1);
+        });
+        cell.addEventListener('mouseleave', function () {
+          if (committed) return;
+          hs.dataset.variant = 'guide';
+          var b = hs.querySelector('.handspan__num'); if (b) b.remove();
+        });
         cells.push({ cell: cell, hs: hs });
         tray.appendChild(cell);
       })(i);
@@ -285,7 +295,7 @@ HS.Game = (function () {
           return;
         }
         var c = cells[step];
-        UI.setHandSpan(c.hs, 'solid', step + 1);
+        UI.setHandSpan(c.hs, 'solid');   // numbers show on hover only, not on commit
         c.cell.dataset.selected = '1';
         FX.pulse(c.cell);
         A.playPop();
@@ -323,49 +333,60 @@ HS.Game = (function () {
    * the table slots (edge-to-edge), with whoosh + bounce. Then resolves.
    * opts: { slots, unit }
    * ====================================================================== */
+  // One "measuring" hand WALKS along the table edge, pressing down at each
+  // position flush after the previous one (no gaps / no overlaps) and leaving a
+  // faded impression behind, so the full sequence of handspans stays visible.
   function measureFly(opts) {
     var slots = opts.slots;
     var unit = opts.unit;
     var s = scene();
+    if (!slots.length) return Promise.resolve();
 
-    function flyOne(i) {
-      return new Promise(function (resolve) {
-        var slot = slots[i];
-        var target = FX.centerOf(slot);
-        // a flying clone
-        var fly = el('div.fly-span');
-        var hs = UI.HandSpan({ variant: 'solid', w: unit, h: unit });
-        fly.appendChild(hs);
-        Object.assign(fly.style, {
-          left: target.x + 'px',
-          top: (FX.STAGE_H + 60) + 'px',
-          transform: 'translate(-50%, -50%) scale(0.8)',
-          transition: 'top 0.5s cubic-bezier(.3,1.2,.5,1), transform 0.5s ease'
-        });
-        s.appendChild(fly);
-        A.playWhoosh();
-        // animate up to the slot position
-        requestAnimationFrame(function () {
-          fly.style.top = target.y + 'px';
-          fly.style.transform = 'translate(-50%, -50%) scale(1)';
-        });
-        setTimeout(function () {
-          // bounce + land
-          A.playPop();
-          FX.sparkleBurst(target.x, target.y, { count: 8, spread: 70, color: '#bfe39a' });
-          UI.setHandSpan(slot, 'solid');
-          FX.pulse(slot);
-          fly.remove();
-          resolve();
-        }, 560);
+    return new Promise(function (resolve) {
+      // the active hand that travels along the edge
+      var first = FX.centerOf(slots[0]);
+      var hand = el('div.fly-span');
+      hand.appendChild(UI.HandSpan({ variant: 'solid', w: unit, h: unit }));
+      Object.assign(hand.style, {
+        left: first.x + 'px', top: first.y + 'px',
+        transform: 'translate(-50%, -50%) scale(0.6)', opacity: '0',
+        transition: 'left 0.34s cubic-bezier(.4,.02,.3,1), top 0.34s ease, transform 0.22s ease, opacity 0.22s ease',
+        zIndex: '24'
       });
-    }
+      s.appendChild(hand);
+      A.playWhoosh();
+      requestAnimationFrame(function () {
+        hand.style.transform = 'translate(-50%, -50%) scale(1)';
+        hand.style.opacity = '1';
+      });
 
-    var chain = Promise.resolve();
-    slots.forEach(function (_, i) {
-      chain = chain.then(function () { return flyOne(i); }).then(function () { return FX.wait(140); });
+      var i = 0;
+      function press() {
+        var slot = slots[i];
+        var c = FX.centerOf(slot);
+        // press-down feedback, then leave a faded impression at this spot
+        A.playPop();
+        FX.pulse(hand);
+        FX.sparkleBurst(c.x, c.y, { count: 6, spread: 46, color: '#bfe39a' });
+        UI.setHandSpan(slot, 'faded');          // faded impression remains
+        i++;
+        if (i >= slots.length) {
+          // done: every position now shows a faded impression; lift the hand away
+          setTimeout(function () {
+            hand.style.transform = 'translate(-50%, -50%) scale(0.7)';
+            hand.style.opacity = '0';
+            setTimeout(function () { hand.remove(); resolve(); }, 240);
+          }, 260);
+          return;
+        }
+        // step to the next position along the edge (flush, one unit along)
+        var n = FX.centerOf(slots[i]);
+        hand.style.left = n.x + 'px';
+        hand.style.top = n.y + 'px';
+        setTimeout(press, 400);
+      }
+      setTimeout(press, 420);
     });
-    return chain;
   }
 
   /* ======================================================================
@@ -421,7 +442,9 @@ HS.Game = (function () {
       seq = seq.then(function () { return welcome("Let's find the right items for the King's feast."); });
       seq = seq.then(function () {
         bgEl.classList.remove('tut-blur');
-        tableSelection();
+        // the tutorial runs on the fixed 5-handspan table; table selection
+        // (8 / 6 span) happens afterward in the hall
+        HS.Tutorial.start(CONFIG, hooks);
       });
       return seq;
     });
@@ -439,50 +462,83 @@ HS.Game = (function () {
     return transitionTo(function () {
       var s = scene();
 
-      var carousel = el('div.carousel');
+      // Identical carousel to the in-game "hall" (pick-a-table) screen: a
+      // scrolling row with ◀ ▶ arrows, tap-a-side-table-to-centre, a glowing
+      // centre table and a hand-nudge. Selecting the centre table starts the
+      // tutorial (instead of measuring).
+      var ART = [
+        { src: 'assets/Table.svg',  ratio: 350 / 662 },
+        { src: 'assets/Table2.svg', ratio: 335 / 567 },
+        { src: 'assets/Table3.svg', ratio: 468 / 772 }
+      ];
 
-      // soft static glow behind the front table (no spinning disc)
+      var carousel = el('div.hall-carousel');
       carousel.appendChild(el('div.select-glow'));
 
-      // three slots: two blurred glimpses behind (pink + green, matching the
-      // hall) + the highlighted wooden front one
-      var left = el('div.carousel__slot carousel__slot--left', null, [UI.Table({ w: 360, src: 'assets/Table2.svg', ratio: 335 / 567 })]);
-      var right = el('div.carousel__slot carousel__slot--right', null, [UI.Table({ w: 360, src: 'assets/Table3.svg', ratio: 468 / 772 })]);
-      var front = el('div.carousel__slot carousel__slot--front');
-      var frontTable = UI.Table({ w: 420 });
-      frontTable.classList.add('table--glow');
-      front.appendChild(frontTable);
+      var cards = ART.map(function (a) {
+        var card = el('div.hall-card');
+        var table = UI.Table({ w: 360, src: a.src, ratio: a.ratio });
+        card._table = table;
+        card.appendChild(table);
+        carousel.appendChild(card);
+        return card;
+      });
 
-      carousel.appendChild(left);
-      carousel.appendChild(right);
-      carousel.appendChild(front);
-      // darken the upper & lower bands so focus lands on the central table
       carousel.appendChild(el('div.carousel-vignette'));
       s.appendChild(carousel);
 
-      // hand-nudge that pops in (tap gesture) over the front table
+      var leftArrow = el('button.hall-arrow hall-arrow--left', { type: 'button' }, '‹');
+      var rightArrow = el('button.hall-arrow hall-arrow--right', { type: 'button' }, '›');
+      s.appendChild(leftArrow);
+      s.appendChild(rightArrow);
+
       var nudge = UI.HandNudge();
       nudge.classList.add('hand-nudge--tap');
       Object.assign(nudge.style, { left: '52%', top: '56%' });
       s.appendChild(nudge);
 
-      front.addEventListener('mouseenter', function () { A.playHover(); });
+      var n = cards.length;
+      var center = 0;
       var picked = false;
-      front.addEventListener('click', function () {
-        if (picked) return;          // guard against double-tap
-        picked = true;
-        front.style.pointerEvents = 'none';
-        A.playClick();
-        var c = FX.centerOf(frontTable);
-        FX.sparkleBurst(c.x, c.y, { count: 20, spread: 160 });
-        FX.ringBurst(c.x, c.y, '#FFD54A');
-        // zoom + bounce, then enter the tutorial
-        front.style.transition = 'transform 0.5s cubic-bezier(.3,1.5,.4,1), opacity 0.5s ease';
-        front.style.transform = 'translate(-50%, -50%) scale(1.3)';
-        nudge.remove();
-        setTimeout(function () {
-          HS.Tutorial.start(CONFIG, hooks);
-        }, 520);
+
+      function layout() {
+        cards.forEach(function (card, i) {
+          card.classList.remove('is-center', 'is-left', 'is-right');
+          var rel = (i - center + n) % n;             // 0 centre, 1 right, 2 left
+          card.classList.add(rel === 0 ? 'is-center' : (rel === 1 ? 'is-right' : 'is-left'));
+          card._table.classList.toggle('table--glow', rel === 0);
+        });
+      }
+      layout();
+
+      function rotate(dir) {
+        A.playHover();
+        nudge.style.display = 'none';
+        center = (center + dir + n) % n;
+        layout();
+      }
+      leftArrow.addEventListener('click', function () { rotate(-1); });
+      rightArrow.addEventListener('click', function () { rotate(1); });
+
+      cards.forEach(function (card, i) {
+        card.addEventListener('mouseenter', function () { A.playHover(); });
+        card.addEventListener('click', function () {
+          // tapping a side table scrolls it to the centre (same as the hall)
+          if (!card.classList.contains('is-center')) {
+            center = i; layout(); A.playHover(); nudge.style.display = 'none'; return;
+          }
+          if (picked) return;                          // guard against double-tap
+          picked = true;
+          card.style.pointerEvents = 'none';
+          A.playClick();
+          var c = FX.centerOf(card._table);
+          FX.sparkleBurst(c.x, c.y, { count: 20, spread: 160 });
+          FX.ringBurst(c.x, c.y, '#FFD54A');
+          card._table.style.transition = 'transform 0.45s cubic-bezier(.3,1.5,.4,1)';
+          card._table.style.transform = 'scale(1.12)';
+          nudge.remove();
+          setTimeout(function () { HS.Tutorial.start(CONFIG, hooks); }, 460);
+        });
       });
       return null;
     });

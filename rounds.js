@@ -24,10 +24,13 @@ HS.Rounds = (function () {
   // distinct artwork per table (each table keeps its own look as it scrolls).
   // e0/e1 = the table's OUTER leg-foot edges as a fraction of its width (measured
   // opaque), so the measuring lines sit on the table's outer outline.
+  // foot = fraction of the artwork's HEIGHT where the legs meet the floor
+  // (measured opaque). Green/pink SVGs have ~16% transparent padding below the
+  // legs, so we anchor by foot to keep every table standing ON the ground.
   var TABLE_ART = [
-    { src: 'assets/Table.svg',  ratio: 350 / 662, name: 'wooden', e0: 0.0288, e1: 0.9663 },
-    { src: 'assets/Table2.svg', ratio: 335 / 567, name: 'purple', e0: 0.055,  e1: 0.940 },
-    { src: 'assets/Table3.svg', ratio: 468 / 772, name: 'green',  e0: 0.0625, e1: 0.9337 }
+    { src: 'assets/Table.svg',  ratio: 350 / 662, name: 'brown', e0: 0.0288, e1: 0.9663, foot: 0.991 },
+    { src: 'assets/Table2.svg', ratio: 335 / 567, name: 'green', e0: 0.055,  e1: 0.940,  foot: 0.839 },
+    { src: 'assets/Table3.svg', ratio: 468 / 772, name: 'pink',  e0: 0.0625, e1: 0.9337, foot: 0.835 }
   ];
   function art(i) { return TABLE_ART[i % TABLE_ART.length]; }
 
@@ -47,10 +50,17 @@ HS.Rounds = (function () {
    * ENTRY — initialise state, then show the hall
    * ====================================================================== */
   function startHall(config, h) {
+    // The tutorial already measured its table (the 5-handspan one), so mark it
+    // done up front: it shows disabled and the player measures the rest (8 & 6).
+    var tutIdx = -1;
+    for (var i = 0; i < config.finalTables.length; i++) {
+      if (config.finalTables[i].spans === config.tutorialSpans) { tutIdx = i; break; }
+    }
     state = {
-      tables: config.finalTables,   // [{spans:4},{spans:8},{spans:6}]
+      tables: config.finalTables,   // [{spans:5},{spans:8},{spans:6}]
       target: config.finalTarget,   // 6
-      measured: [],                 // indices already measured
+      measured: tutIdx >= 0 ? [tutIdx] : [],   // tutorial table pre-measured
+      hallMeasured: 0,              // tables measured IN the hall (for the faded guide)
       introShown: false,
       center: 0
     };
@@ -90,8 +100,19 @@ HS.Rounds = (function () {
         return card;
       });
 
-      // top/bottom darkening so the centred table pops
-      carousel.appendChild(el('div.carousel-vignette'));
+      // floating dust motes drifting up through the warm spotlight (atmosphere)
+      for (var d = 0; d < 9; d++) {
+        var mote = el('div.dust');
+        var sz = 3 + Math.random() * 5;
+        Object.assign(mote.style, {
+          left: (42 + Math.random() * 16) + '%',
+          top: (46 + Math.random() * 30) + '%',
+          width: sz + 'px', height: sz + 'px',
+          animationDuration: (6 + Math.random() * 6) + 's',
+          animationDelay: (-Math.random() * 8) + 's'
+        });
+        carousel.appendChild(mote);
+      }
       s.appendChild(carousel);
 
       // scroll arrows
@@ -181,8 +202,10 @@ HS.Rounds = (function () {
       name: art(index).name,
       e0: art(index).e0,
       e1: art(index).e1,
-      showFaded: state.measured.length === 0,   // faded track only on the first table
+      foot: art(index).foot,
+      showFaded: state.hallMeasured === 0,   // faded track only on the first HALL table
       onDone: function () {
+        state.hallMeasured++;
         state.measured.push(index);
         // The game does NOT end the moment the 6-span table is found — the
         // player measures every table first. Once all are measured, Gogo
@@ -203,16 +226,17 @@ HS.Rounds = (function () {
     // between the table's OUTER leg edges (e0..e1), bracketed by the guides.
     var e0 = opts.e0 != null ? opts.e0 : 0.05;
     var e1 = opts.e1 != null ? opts.e1 : 0.95;
-    var HW = 82;                                     // constant flush hand width
+    var foot = opts.foot != null ? opts.foot : 0.99;  // leg-foot fraction of the art height
+    var HW = 70;                                      // constant flush hand width (a bit smaller)
     var TRACK_W = HW * spans;                         // track length scales with spans
     var TABLE_W = TRACK_W / (e1 - e0);                // table width that fits the track
     var TABLE_LEFT = (FX.STAGE_W - TABLE_W) / 2;
     var TABLE_H = TABLE_W * (opts.ratio || 350 / 662);
-    // The table's feet rest on a common floor line low in the scene (so it
-    // doesn't float); taller tables extend further UP. The hand row sits JUST
-    // BELOW the feet so the hands never overlap the table.
-    var FLOOR_Y = 452;                               // table foot line (grounded, low)
-    var TABLE_TOP = FLOOR_Y - TABLE_H;
+    // Every table STANDS ON the floor line: we anchor by its measured leg-foot
+    // (foot) so the visible legs — not the transparent padding below them — land
+    // on FLOOR_Y. The hand row sits right at the feet.
+    var FLOOR_Y = 452;                               // floor line (where the legs stand)
+    var TABLE_TOP = FLOOR_Y - TABLE_H * foot;
     var TRACK_X0 = TABLE_LEFT + TABLE_W * e0;
     var HAND_TOP = FLOOR_Y;                           // hand-box top at the feet (hands hang below)
     var GUIDE_TOP = FLOOR_Y - 10;                     // dashed guides begin at the feet
