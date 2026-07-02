@@ -415,7 +415,7 @@ html, body {
   filter: drop-shadow(0 12px 16px rgba(0,0,0,0.28));
   animation: float-char 3.6s ease-in-out infinite;
 }
-.feedback-gogo--left { left: 24px; }
+.feedback-gogo--left { left: 94px; }
 .feedback-gogo--right { right: 24px; }
 /* Per-image sizing: the success gif is tightly cropped (much taller per px) so
    it gets a smaller width to read as the SAME character size as the others.
@@ -494,6 +494,34 @@ html, body {
   animation: spot-breathe 3.8s ease-in-out infinite;   /* gentle pulse */
 }
 @keyframes spot-breathe { 0%,100% { opacity: 0.78; } 50% { opacity: 1; } }
+/* the vignette fades in when the lights turn on (see .hall-carousel--flat) */
+.hall-carousel::before { transition: opacity 0.5s ease; }
+
+/* ---- TUTORIAL: "here are the tables" intro states ----------------------- *
+ * Two independent stages so the reveal plays out ONE STEP AT A TIME:
+ *   --unlit : no spotlight (beam/vignette/glow hidden). Remove it => lights on.
+ *   --flat  : all three tables equally visible & sharp, spread in a row, no
+ *             blur/dim. Remove it => the sides recede & blur (selection look).
+ * They start applied together; the tutorial removes --unlit first (lights on
+ * with SFX), then --flat a beat later (tables move back). */
+.hall-carousel--unlit::before { opacity: 0; }
+.hall-carousel--unlit::after  { opacity: 0; animation: none; }
+.hall-carousel--unlit .select-glow { opacity: 0; animation: none; }
+.hall-carousel--flat .hall-card.is-center { left: 50%; transform: translateX(-50%) scale(0.62); }
+.hall-carousel--flat .hall-card.is-left  { left: 22%; opacity: 1; filter: none; transform: translateX(-50%) scale(0.62); }
+.hall-carousel--flat .hall-card.is-right { left: 78%; opacity: 1; filter: none; transform: translateX(-50%) scale(0.62); }
+
+/* a brief warm flash of the beam as the lights snap on */
+.lights-flash {
+  position: absolute; left: 50%; top: -6%; transform: translateX(-50%);
+  width: 72%; height: 98%; z-index: 4; pointer-events: none;
+  background: linear-gradient(to bottom,
+    rgba(255,244,205,0.85) 0%, rgba(255,236,175,0.4) 40%, transparent 85%);
+  clip-path: polygon(38% 0%, 62% 0%, 93% 100%, 7% 100%);
+  filter: blur(14px);
+  opacity: 0; transition: opacity 0.28s ease;
+}
+.lights-flash.is-on { opacity: 1; }
 
 /* Floating dust motes drifting up through the spotlight (atmosphere) */
 .dust {
@@ -672,7 +700,7 @@ html, body {
 
 /* tap-gesture nudge: pops in, then presses (used over the table to select) */
 .hand-nudge--tap {
-  width: 140px;
+  width: 45px;
   transform-origin: 30% 20%;
   animation: tap-pop 1.5s ease-in-out infinite;
 }
@@ -765,6 +793,48 @@ html, body {
   color: #fff; font-weight: 800; font-size: 42px; text-align: center; line-height: 1.1;
   text-shadow: 0 2px 0 rgba(0,0,0,0.18);
 }
+/* --- GOGO SPEAKS: posed character + bubble whose tail points at it -------- */
+.gogo-char {
+  position: absolute; z-index: 32; pointer-events: none;
+  filter: drop-shadow(0 10px 14px rgba(0,0,0,0.32));
+  animation: float-char 3.6s ease-in-out infinite;
+}
+.gogo-char img { width: 100%; display: block; }
+.gogo-char--talk, .gogo-char--think, .gogo-char--show { width: 340px; }
+/* wrongGogo's character fills its frame more, so it needs a narrower box to
+   read as the SAME size as the other poses */
+.gogo-char--wrong { width: 280px; }
+.gogo-char--horizontal { width: 310px; animation: none; }   /* lounging narrator */
+
+.say-bubble {
+  position: absolute; z-index: 34; max-width: 400px; min-height: 60px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 14px 30px;
+  background: linear-gradient(160deg, #BE1BFF 0%, #9C109F 48%, #600186 100%);
+  border: 5px solid var(--yellow); border-radius: 24px;
+  box-shadow: var(--shadow-pop);
+  animation: bubble-pop 0.4s cubic-bezier(.2,1.4,.5,1) both;
+}
+.say-bubble__text {
+  color: #fff; font-weight: 800; font-size: 30px; text-align: center; line-height: 1.16;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.18);
+}
+.say-bubble__tail { position: absolute; width: 0; height: 0; }
+/* tail DOWN toward a Gogo standing below-right (bubble sits above the Gogo) */
+.say-bubble--down-right .say-bubble__tail {
+  bottom: -22px; right: 188px;
+  border-left: 20px solid transparent; border-right: 20px solid transparent;
+  border-top: 24px solid #7a0f9a;
+  filter: drop-shadow(0 4px 0 var(--yellow));
+}
+/* tail LEFT toward a Gogo in the top-left corner (bubble sits to its right) */
+.say-bubble--left .say-bubble__tail {
+  left: -25px; top: 50%; transform: translateY(-50%);
+  border-top: 17px solid transparent; border-bottom: 17px solid transparent;
+  border-right: 26px solid #7a0f9a;
+  filter: drop-shadow(-4px 0 0 var(--yellow));
+}
+
 .welcome-panel__tail {
   position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%);
   width: 0; height: 0;
@@ -788,7 +858,7 @@ html, body {
   box-shadow: var(--shadow-pop);
   animation: bubble-pop 0.4s cubic-bezier(.2,1.4,.5,1) both;
 }
-.fb-bubble--left  { left: 40px; }
+.fb-bubble--left  { left: 110px; }
 .fb-bubble--right { right: 40px; }
 .fb-bubble__text {
   color: #fff; font-weight: 800; font-size: 28px; text-align: center; line-height: 1.18;

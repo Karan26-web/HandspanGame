@@ -439,6 +439,39 @@ HS.UI = (function () {
     return el('div.tut-vignette');
   }
 
+  /* ======================================================================
+   * GOGO SPEAKS — unified instruction system
+   * A Gogo character (posed by the KIND of line) plus a speech bubble whose
+   * tail points AT that Gogo. Poses:
+   *   'think' -> ThinkGogo   (questions / pondering: "But How?", "Here?")
+   *   'show'  -> ShowingGogo (pointing / instructing: "Tap here…", "Drag…")
+   *   'talk'  -> gogo        (statements / celebration: "We need to…", "Yes!")
+   *   'horizontal' -> HorizontalGogo (casual narration from the corner)
+   * ====================================================================== */
+  var GOGO_POSE = { think: 'ThinkGogo.webp', show: 'ShowingGogo.webp', talk: 'gogo.webp', horizontal: 'HorizontalGogo.webp', wrong: 'wrongGogo.webp' };
+  function GogoCharacter(pose) {
+    pose = pose || 'talk';
+    var c = el('div.gogo-char gogo-char--' + pose);
+    c.appendChild(el('img', { src: 'assets/' + (GOGO_POSE[pose] || 'gogo.webp'), alt: '', draggable: 'false' }));
+    return c;
+  }
+  // Swap an existing Gogo character's pose (keeps its position/animation).
+  function setGogoPose(charEl, pose) {
+    pose = pose || 'talk';
+    charEl.className = 'gogo-char gogo-char--' + pose;
+    var img = charEl.querySelector('img');
+    if (img) img.src = 'assets/' + (GOGO_POSE[pose] || 'gogo.webp');
+  }
+  // Speech bubble with a tail pointing at the speaker.
+  // tail: 'down-right' (bubble ABOVE a right-anchored Gogo) | 'left' (bubble to
+  // the RIGHT of a left-anchored Gogo).
+  function SayBubble(text, tail) {
+    var b = el('div.say-bubble say-bubble--' + (tail || 'down-right'));
+    b.appendChild(el('div.say-bubble__text', { text: text || '' }));
+    b.appendChild(el('div.say-bubble__tail'));
+    return b;
+  }
+
   // Small purple call-out chip ("Start from one end.", "No Gaps!", ...).
   function LabelChip(text) {
     return el('div.label-chip', null, [
@@ -467,6 +500,9 @@ HS.UI = (function () {
     TitleChip: TitleChip,
     Heading: Heading,
     TutorialBubble: TutorialBubble,
+    GogoCharacter: GogoCharacter,
+    setGogoPose: setGogoPose,
+    SayBubble: SayBubble,
     WelcomePanel: WelcomePanel,
     FeedbackBubble: FeedbackBubble,
     HandUnit: HandUnit,

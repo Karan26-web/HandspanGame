@@ -468,11 +468,10 @@ HS.Game = (function () {
 
       var seq = FX.wait(150);
       seq = seq.then(function () { return welcome('Welcome to the Hall of Helpful Things!'); });
-      seq = seq.then(function () { return welcome("Let's find the right items for the King's feast."); });
       seq = seq.then(function () {
         bgEl.classList.remove('tut-blur');
-        // the tutorial runs on the fixed 5-handspan table; table selection
-        // (8 / 6 span) happens afterward in the hall
+        // the tutorial shows the three tables, focuses the 5-span one, and runs
+        // the guided drag lesson on it; the remaining tables follow in the hall
         HS.Tutorial.start(CONFIG, hooks);
       });
       return seq;
