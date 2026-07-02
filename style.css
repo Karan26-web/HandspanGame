@@ -77,11 +77,11 @@ html, body {
 .hidden { display: none !important; }
 
 /* ============================================================================
- * BACKGROUND — uniform room image (assets/Bgm.png) on every screen
+ * BACKGROUND — uniform room image (assets/Bgm.webp) on every screen
  * ========================================================================== */
 .bg {
   position: absolute; inset: 0; z-index: 0; overflow: hidden;
-  background: url("assets/Bgm.png") center center / cover no-repeat;
+  background: url("assets/Bgm.webp") center center / cover no-repeat;
 }
 /* A subtle vignette to help white/dark UI read against the warm wall. */
 .bg::after {
@@ -91,20 +91,50 @@ html, body {
 /* Background is uniform; the .bg--castle / .bg--play modifiers are kept as
    no-ops so existing setBackground() calls remain valid. */
 .bg--play, .bg--castle { /* same uniform room background */ }
+/* the cloth flow uses a different room (Bgm2) */
+.bg.bg--cloth { background-image: url("assets/Bgm2.webp"); }
 
 /* ============================================================================
  * BOOT / TAP TO PLAY
  * ========================================================================== */
 .boot {
   position: fixed; inset: 0; z-index: 200;
-  display: flex; align-items: flex-end; justify-content: center;
-  padding-bottom: 7vh;
-  background: #160d28 url('assets/PreLBD.png') center center / cover no-repeat;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 46vh;                  /* sit just below the "Measure the Magic" ribbon */
+  background: #160d28 url('assets/PreLBD.webp') center center / cover no-repeat;
 }
 .boot.hidden { display: none; }
 .boot__card { text-align: center; animation: float-bob 3.6s ease-in-out infinite; }
 @keyframes float-bob { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-12px);} }
-.boot__btn { font-size: 34px; padding: 16px 60px; }
+/* circular play button (PlayButton orb artwork) */
+.boot__btn {
+  width: 150px; height: 150px;
+  padding: 0; border: none; background: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.42));
+  animation: play-pulse 1.4s ease-in-out infinite;  /* "click me" heartbeat */
+  transition: transform 0.12s ease, filter 0.15s ease;
+}
+.boot__btn img { width: 100%; height: 100%; display: block; pointer-events: none; }
+.boot__btn:hover { filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.5)) brightness(1.06); }
+.boot__btn:active { transform: scale(0.94); }
+/* glowing ring that expands outward to draw the eye to the button */
+.boot__btn::after {
+  content: ""; position: absolute; inset: 4px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 214, 74, 0.85);
+  animation: play-ring 1.6s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes play-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.07); }
+}
+@keyframes play-ring {
+  0%   { transform: scale(1);   opacity: 0.9; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
 
 /* ============================================================================
  * BUTTONS
@@ -129,11 +159,11 @@ html, body {
 
 .btn--play {
   font-size: 34px; padding: 20px 56px;
-  background: linear-gradient(180deg, #ffd24a, #ff9f1c);
-  box-shadow: 0 9px 0 #c97f0a, var(--shadow-pop);
-  color: #5a3200;
+  background: linear-gradient(180deg, #fedf46, #ffba00);
+  box-shadow: 0 9px 0 #db9c10, 0 0 34px 6px rgba(255, 214, 74, 0.55), var(--shadow-pop);
+  color: #c94c07;
 }
-.btn--play:active { box-shadow: 0 3px 0 #c97f0a, var(--shadow-pop); }
+.btn--play:active { box-shadow: 0 3px 0 #db9c10, 0 0 34px 6px rgba(255, 214, 74, 0.55), var(--shadow-pop); }
 
 .btn--purple {
   background: linear-gradient(180deg, var(--purple-3), var(--purple-1));
@@ -220,10 +250,19 @@ html, body {
      the hands touch with no gaps (1 / 0.689 ≈ 145%). */
   position: absolute; left: 50%; top: 50%;
   transform: translate(-50%, -50%);
-  width: 145%; height: auto; display: block;
+  width: 162%; height: auto; display: block;   /* enlarged so flush spans touch (no gaps) */
   filter: drop-shadow(0 6px 6px rgba(80,40,10,0.28));
   transition: opacity 0.3s ease, filter 0.3s ease;
 }
+
+/* the animation's settle pose: 108% makes the VISIBLE hand exactly fill its
+   box (flush, inside the guide lines). Kept identical to .measure-hand__vid so
+   the moving hand and the impression it leaves are pixel-identical. */
+.handspan--anim .handspan__hand { width: 108%; }
+/* vertical measuring: rotate the HAND (not the box) 90° so its thumb-to-pinky
+   span runs vertically — stacked in a line it measures height. Rotating the
+   image (not the .handspan box) keeps it intact through the fly-in transform. */
+.handspan--vert .handspan__hand { transform: translate(-50%, -50%) rotate(90deg); }
 
 /* guide: dimmed but clearly visible (inviting to tap / shows the slot) */
 .handspan[data-variant="guide"] .handspan__hand { opacity: 0.5; }
@@ -233,6 +272,10 @@ html, body {
 .handspan[data-variant="faded"] .handspan__hand { opacity: 0.4; }
 /* impression used in the wrong-demo */
 .handspan[data-variant="impression"] .handspan__hand { opacity: 0.45; }
+/* a WRONG placement's impression (gap / overlap demo) — tinted red */
+.impression--wrong .handspan__hand {
+  filter: drop-shadow(0 0 10px rgba(255,70,70,0.9)) saturate(1.4) hue-rotate(-22deg);
+}
 
 /* number badge above a handspan (grey chip, like the PDF) */
 .handspan__num {
@@ -273,6 +316,8 @@ html, body {
 .table { position: relative; }
 .table__img {
   width: 100%; height: 100%; display: block;
+  object-fit: contain;   /* raster Table.webp letterboxes like the old SVG did,
+                            so the measured leg-edge (e0/e1) + foot geometry holds */
   filter: drop-shadow(0 18px 18px rgba(60,30,10,0.22));
   pointer-events: none;
 }
@@ -309,8 +354,9 @@ html, body {
  * ========================================================================== */
 .hall-carousel { position: absolute; inset: 0; z-index: 10; }
 .hall-card {
-  position: absolute; left: 50%; top: 54%;
-  transform: translate(-50%, -50%);
+  position: absolute; left: 50%; bottom: 236px; top: auto;
+  transform: translateX(-50%);
+  transform-origin: bottom center;   /* different-sized tables all STAND on the floor line */
   /* smooth 400ms ease-in-out cross-fade of position, depth-blur & brightness */
   transition: transform 0.42s cubic-bezier(.3,1.05,.4,1), opacity 0.42s ease, filter 0.42s ease, left 0.42s cubic-bezier(.3,1.05,.4,1);
   cursor: pointer; will-change: transform, filter, opacity;
@@ -318,7 +364,7 @@ html, body {
 /* SELECTED table — sharp, a touch brighter, lifted forward with a soft shadow */
 .hall-card.is-center {
   z-index: 5;
-  transform: translate(-50%, -50%) scale(1);
+  transform: translateX(-50%) scale(1);
   filter: brightness(1.06) drop-shadow(0 22px 26px rgba(45,22,6,0.42));
 }
 /* NON-selected tables recede: smaller, blurred, dimmed, desaturated, no glow */
@@ -326,18 +372,20 @@ html, body {
   opacity: 0.5;
   filter: blur(3px) brightness(0.55) saturate(0.7) grayscale(0.12);
 }
-.hall-card.is-left  { z-index: 2; left: 15%; transform: translate(-50%, -50%) scale(0.48); }
-.hall-card.is-right { z-index: 3; left: 85%; transform: translate(-50%, -50%) scale(0.48); }
+.hall-card.is-left  { z-index: 2; left: 15%; transform: translateX(-50%) scale(0.48); }
+.hall-card.is-right { z-index: 3; left: 85%; transform: translateX(-50%) scale(0.48); }
 /* side tables lift toward the player on hover so they read as interactive */
 .hall-card.is-left:not(.hall-card--done):hover,
 .hall-card.is-right:not(.hall-card--done):hover {
   opacity: 0.9; filter: blur(1px) brightness(0.85) saturate(0.9);
-  transform: translate(-50%, -50%) scale(0.55);
+  transform: translateX(-50%) scale(0.55);
 }
 
 /* a measured table is disabled (greyed) and shows its length */
 .hall-card--done { filter: grayscale(0.9) brightness(0.78); cursor: default; }
-.hall-card--done.is-center { animation: none; }
+/* a measured table stays visibly disabled (greyed & dim) even when it scrolls
+   to the centre — overrides the centre's brightness boost */
+.hall-card--done.is-center { animation: none; filter: grayscale(0.95) brightness(0.6); }
 .hall-card__done {
   position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%);
   background: #3a2152; color: var(--yellow); font-weight: 800; font-size: 22px;
@@ -348,17 +396,18 @@ html, body {
 .hall-arrow {
   position: absolute; top: 54%; transform: translateY(-50%);
   z-index: 20; width: 76px; height: 76px; border-radius: 50%;
-  border: none; cursor: pointer; color: #fff;
+  border: 3px solid var(--yellow); cursor: pointer; color: #fff;
+  text-shadow: 0 2px 3px rgba(120,70,0,0.55);
   font-size: 50px; font-weight: 800; line-height: 1; padding-bottom: 8px;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(180deg, var(--purple-3), var(--purple-1));
-  box-shadow: 0 6px 0 #5a157a, var(--shadow-soft);
+  background: linear-gradient(180deg, #ffdc63, var(--yellow-deep));
+  box-shadow: 0 6px 0 #c47d10, var(--shadow-soft);
   transition: transform 0.12s ease, filter 0.15s ease;
 }
 .hall-arrow--left { left: 36px; }
 .hall-arrow--right { right: 36px; }
-.hall-arrow:hover { filter: brightness(1.1); }
-.hall-arrow:active { transform: translateY(-50%) scale(0.92); box-shadow: 0 3px 0 #5a157a, var(--shadow-soft); }
+.hall-arrow:hover { filter: brightness(1.06); }
+.hall-arrow:active { transform: translateY(-50%) scale(0.92); box-shadow: 0 3px 0 #c47d10, var(--shadow-soft); }
 
 /* full-body genie on the feedback screens (success / wrong / clue) */
 .feedback-gogo {
@@ -600,6 +649,9 @@ html, body {
 .guess-cell { cursor: pointer; transition: transform 0.15s ease; }
 .guess-cell:hover { transform: translateY(-6px) scale(1.05); }
 .guess-cell[data-selected="1"] { transform: translateY(-4px); }
+/* cells in the hovered run 1..N lift together as a group */
+.guess-cell--lit { transform: translateY(-6px); }
+.guess-cell--lit .handspan__hand { filter: drop-shadow(0 4px 6px rgba(80,40,10,0.3)) drop-shadow(0 0 8px rgba(255,213,74,0.7)); }
 /* guided first flow: the correct cell glows so the player taps the right number */
 .guess-cell--hint .handspan { animation: cell-hint 1.05s ease-in-out infinite; }
 @keyframes cell-hint {
@@ -758,11 +810,23 @@ html, body {
    boxes one box-width apart makes the hands touch with no gaps (~145%). */
 .hand-unit img {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: 145%; height: auto; display: block;
+  width: 162%; height: auto; display: block;   /* match .handspan flush scale */
   filter: drop-shadow(0 6px 6px rgba(80,40,10,0.28));
 }
 .hand-unit.is-faded { opacity: 0.38; }
 .hand-unit.is-wrong img { filter: drop-shadow(0 0 10px rgba(255,70,70,0.9)); }
+
+/* --- animated measuring hand (handSpanAnimation, transparent VP9 video) --- */
+/* THE measuring animation: a hand that stretches to span one unit. Its visible
+   content fills ~85% of the frame, so scale to 118% to fill the box width like
+   the still handspan does. */
+.measure-hand { position: absolute; z-index: 24; pointer-events: none; }
+.measure-hand__vid {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 108%; height: auto; display: block;   /* match .handspan--anim exactly */
+  filter: drop-shadow(0 6px 6px rgba(80,40,10,0.28));
+}
+.measure-hand.is-wrong .measure-hand__vid { filter: drop-shadow(0 0 12px rgba(255,70,70,0.9)); }
 
 /* --- hand on holographic podium (the draggable source) ------------------ */
 .hand-podium { position: absolute; width: 200px; height: 250px; z-index: 24; }
@@ -795,6 +859,9 @@ html, body {
   /* hidden until revealed (grows downward) with an SFX */
   transform: scaleY(0); transform-origin: top center; opacity: 0;
 }
+/* the start (left) line sits at the track's left edge; shift its 4px dash
+   outward so it hugs the OUTSIDE of the leg, mirroring the end line */
+.measure-guide__line--start { margin-left: -4px; }
 .measure-guide__line.is-in {
   animation: guide-drop 0.45s cubic-bezier(.2,1.1,.4,1) forwards;
 }
@@ -934,3 +1001,117 @@ html, body {
 .overlay__title--ok { color: #aef5b8; }
 .overlay__title--bad { color: #ffd24a; }
 .overlay__sub { font-size: 30px; font-weight: 700; color: #fff; text-align: center; max-width: 70%; }
+
+
+/* ============================================================================
+ * CANDLE STAND (vertical-measuring round)
+ * ========================================================================== */
+/* horizontal dashed guide (top & bottom of a candle stand) */
+.measure-guide__line--h {
+  width: auto; height: 0; border-left: none;
+  border-top: 4px dashed #e11dff;
+  transform: scaleX(0); transform-origin: center center;
+}
+.measure-guide__line--h.is-in { animation: guide-draw-h 0.45s cubic-bezier(.2,1.1,.4,1) forwards; }
+@keyframes guide-draw-h {
+  0%   { transform: scaleX(0); opacity: 0; }
+  100% { transform: scaleX(1); opacity: 1; }
+}
+
+.candle { position: relative; }
+.candle__img {
+  width: 100%; height: 100%; display: block;
+  filter: drop-shadow(0 14px 16px rgba(60,30,10,0.30));
+  pointer-events: none;
+}
+/* centred, still-measurable candle glows in the carousel */
+.candle--glow .candle__img {
+  filter: drop-shadow(0 0 16px rgba(255,213,74,0.95)) drop-shadow(0 0 34px rgba(255,213,74,0.6));
+  animation: candle-glow-pulse 1.6s ease-in-out infinite;
+}
+@keyframes candle-glow-pulse {
+  0%,100% { filter: drop-shadow(0 0 12px rgba(255,213,74,0.8)) drop-shadow(0 0 24px rgba(255,213,74,0.45)); }
+  50%     { filter: drop-shadow(0 0 20px rgba(255,213,74,1)) drop-shadow(0 0 40px rgba(255,213,74,0.7)); }
+}
+
+/* ============================================================================
+ * CLOTH (horizontal-measuring round)
+ * ========================================================================== */
+.cloth { position: relative; }
+.cloth__img {
+  width: 100%; height: 100%; display: block;
+  filter: drop-shadow(0 16px 20px rgba(30,20,60,0.35));
+  pointer-events: none;
+}
+/* centred, still-measurable cloth glows in the carousel */
+.cloth--glow .cloth__img {
+  filter: drop-shadow(0 0 16px rgba(255,213,74,0.95)) drop-shadow(0 0 34px rgba(255,213,74,0.6));
+  animation: cloth-glow-pulse 1.6s ease-in-out infinite;
+}
+@keyframes cloth-glow-pulse {
+  0%,100% { filter: drop-shadow(0 0 12px rgba(255,213,74,0.8)) drop-shadow(0 0 24px rgba(255,213,74,0.45)); }
+  50%     { filter: drop-shadow(0 0 20px rgba(255,213,74,1)) drop-shadow(0 0 40px rgba(255,213,74,0.7)); }
+}
+
+/* cloth choosing screen: keep the Bgm2 room plain — no spotlight cone, no
+   vignette darkening, no glow (the centre cloth still gets its own glow). */
+.hall-carousel--cloth::before { display: none; }
+.hall-carousel--cloth::after  { display: none; }
+.hall-carousel--cloth .select-glow { display: none; }
+
+/* cloth choosing screen is a TOP VIEW, so centre the cloths vertically instead
+   of standing them on a floor line (like tables/candles) — the three cloths
+   then read as a balanced, centre-aligned row rather than random heights. */
+.hall-carousel--cloth .hall-card {
+  top: 50%; bottom: auto;
+  transform: translate(-50%, -50%);
+  transform-origin: center center;
+}
+.hall-carousel--cloth .hall-card.is-center { transform: translate(-50%, -50%) scale(1); }
+.hall-carousel--cloth .hall-card.is-left,
+.hall-carousel--cloth .hall-card.is-right  { transform: translate(-50%, -50%) scale(0.5); }
+/* keep the vertical centring on hover too, so a side cloth lifts in place
+   instead of dropping down (the base hover uses translateX only) */
+.hall-carousel--cloth .hall-card.is-left:not(.hall-card--done):hover,
+.hall-carousel--cloth .hall-card.is-right:not(.hall-card--done):hover { transform: translate(-50%, -50%) scale(0.57); }
+
+/* ============================================================================
+ * DRAG-TO-MEASURE (table flow)
+ * ========================================================================== */
+/* invisible snap targets; a soft glow appears only while dragging over one */
+.drop-zone { pointer-events: none; border-radius: 8px; transition: box-shadow 0.15s ease, background 0.15s ease; }
+.drop-zone--target {
+  background: rgba(255, 213, 74, 0.16);
+  box-shadow: inset 0 0 0 3px rgba(255, 213, 74, 0.9), 0 0 8px rgba(255, 213, 74, 0.4);
+}
+/* glowing podium the hand rests on */
+.drag-podium {
+  position: absolute; width: 150px; height: 44px; transform: translateX(-50%);
+  border-radius: 50%; z-index: 21; pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(190,27,255,0.6), rgba(120,16,150,0.22) 60%, transparent 74%);
+  box-shadow: 0 0 26px rgba(190,27,255,0.45);
+  animation: podium-pulse 3s ease-in-out infinite;
+}
+@keyframes podium-pulse { 0%,100% { opacity: 0.82; } 50% { opacity: 1; } }
+/* the draggable hand */
+.drag-hand {
+  position: absolute; cursor: grab; z-index: 26; touch-action: none;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.drag-hand img {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 108%; height: auto; display: block;
+  filter: drop-shadow(0 8px 10px rgba(80,40,10,0.35));
+}
+.drag-hand--dragging { cursor: grabbing; z-index: 40; }
+.drag-hand--dragging img { filter: drop-shadow(0 16px 18px rgba(0,0,0,0.42)); }
+/* idle hint: gently bob + glow the resting hand */
+.drag-hand--hint { animation: drag-hint 1s ease-in-out infinite; }
+.drag-hand--hint img { filter: drop-shadow(0 8px 10px rgba(80,40,10,0.35)) drop-shadow(0 0 12px rgba(255,213,74,0.9)); }
+@keyframes drag-hint {
+  0%,100% { transform: translateY(0) scale(1); }
+  50%     { transform: translateY(-8px) scale(1.06); }
+}
+/* first-time drag arrow: marching dashes */
+.drag-arrow path { animation: arrow-dash 0.6s linear infinite; }
+@keyframes arrow-dash { to { stroke-dashoffset: -20; } }

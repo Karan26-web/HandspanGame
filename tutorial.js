@@ -36,17 +36,17 @@ HS.Tutorial = (function () {
   var el = UI.el;
 
   /* ---- geometry (1920x1080 Figma -> 1280x720 stage, x2/3) -------------- */
-  // The tutorial uses the GREEN table (Table2.svg, the 5-handspan table). Its
-  // art is taller per width than the brown table, so the table extends further
-  // up while its base stays on the same floor line (bottom ≈ 481).
-  var TABLE_SRC = 'assets/Table2.svg';
-  var TABLE_RATIO = 335 / 567;
-  // top stays ~179 (as the brown table used): Table2's taller wrap has bottom
-  // padding, so its visible legs land right on the guide line at this anchor.
-  var TABLE = { left: 354, top: 179, w: 572, h: 338 };
-  // Guides sit on the table's OUTER leg-foot edges (Table2.svg feet span
-  // 5.5%..94% of its width): 354 + 572*0.055 ≈ 385, 354 + 572*0.940 ≈ 892.
-  var GUIDE = { startX: 385, endX: 892, top: 466, h: 98 };
+  // The tutorial uses the brown table (Table.svg), same artwork as every other
+  // table — they differ only by size.
+  var TABLE_SRC = 'assets/Table.webp';
+  var TABLE_RATIO = 350 / 662;
+  // top chosen so the VISIBLE legs (at ~0.855 of the letterboxed element height)
+  // land on the guide-line top (GUIDE.top) — table and edge lines stay in touch.
+  var TABLE = { left: 354, top: 208, w: 572, h: 302 };
+  // Guides sit on the table's OUTER leg-foot edges (Table.svg feet span
+  // 3.75%..95.42% of its width, measured): 354 + 572*0.0375 ≈ 375,
+  // 354 + 572*0.9542 ≈ 900.
+  var GUIDE = { startX: 375, endX: 900, top: 466, h: 98 };
   // The visible hand now fills the box width, so the box width IS the flush
   // hand width — placing boxes one box-width apart makes the hands touch.
   var HAND_BOX = 88;
@@ -101,6 +101,52 @@ HS.Tutorial = (function () {
         hand.style.top = HAND_TOP + 'px';
       });
       setTimeout(function () { A.playPop(); FX.pulse(hand); resolve(hand); }, 740);
+    });
+  }
+
+  /* ---- measuring-hand helpers (the stretch-to-measure animation) --------- */
+  // a static impression left where a hand measured, centred at cx
+  function impression(layer, cx, opts) {
+    opts = opts || {};
+    // the animation's settle-frame art at the video's scale, so the impression
+    // exactly matches the animated measuring hand where it ended (no gap)
+    var hs = UI.HandSpan({ variant: opts.variant || 'faded', w: HAND_BOX, h: HAND_BOX, anim: true });
+    Object.assign(hs.style, {
+      position: 'absolute', left: (cx - HAND_BOX / 2) + 'px', top: HAND_TOP + 'px', zIndex: '18'
+    });
+    if (opts.wrong) hs.classList.add('impression--wrong');
+    layer.appendChild(hs);
+    return hs;
+  }
+
+  // create the travelling measuring-hand (video) at a start centre
+  function spawnMeasureHand(layer, cx) {
+    var hand = UI.MeasureHand(HAND_BOX);
+    Object.assign(hand.style, {
+      zIndex: '22', opacity: '0', top: HAND_TOP + 'px', left: (cx - HAND_BOX / 2) + 'px',
+      transition: 'left 0.45s cubic-bezier(.3,1,.4,1), opacity 0.25s ease'
+    });
+    layer.appendChild(hand);
+    requestAnimationFrame(function () { hand.style.opacity = '1'; });
+    return hand;
+  }
+
+  // glide the travelling hand to a new centre (resolves after the move)
+  function glide(hand, cx) {
+    return new Promise(function (resolve) {
+      hand.style.left = (cx - HAND_BOX / 2) + 'px';
+      setTimeout(resolve, 480);
+    });
+  }
+
+  // stretch-measure at the hand's current spot, then leave an impression behind
+  function stamp(layer, hand, cx, opts) {
+    opts = opts || {};
+    A.playWhoosh();
+    return UI.playMeasureHand(hand, opts.rate || 1).then(function () {
+      A.playPop();
+      FX.sparkleBurst(cx, HAND_TOP + HAND_BOX / 2, { count: 7, spread: 52, color: opts.color || '#bfe39a' });
+      return impression(layer, cx, { variant: 'faded', wrong: opts.wrong });
     });
   }
 
@@ -192,23 +238,37 @@ HS.Tutorial = (function () {
         return say('gogo', 'The hand must be placed at the starting point.');
       });
 
-      /* ===== D. THE RULES ============================================ */
+      /* ===== D. INCORRECT MEASUREMENTS (gaps & overlaps) ============= *
+       * Begin with one open handspan at the start, then demonstrate the WRONG
+       * ways — a gap, then an overlap — each leaving a faded impression so the
+       * mistakes stay visible.                                              */
+      var wrongHand;
       run = run.then(function () {
-        // a second hand, flush after the first
-        s._hand2 = placeHand(layer, HAND_C[1]);
-        return say('gogo', 'Now, let me place the next hand.');
+        UI.clear(layer);                       // clear the section-C demo hand
+        // begin with a handspan in the open position, at the starting point
+        impression(layer, HAND_C[0], { variant: 'solid' });
+        return say('gogo', 'I place the first hand at the starting point.');
       });
       run = run.then(function () {
-        // demonstrate a GAP: shove hand2 to the right
-        s._hand2.style.left = (HAND_C[1] + 70 - HAND_BOX / 2) + 'px';
-        s._hand2.classList.add('is-wrong');
-        return say('gogo', 'We need to place the hands with no gaps.');
+        // GAP: the next hand lands with a space after the first
+        wrongHand = spawnMeasureHand(layer, HAND_C[0]);
+        return glide(wrongHand, 540)
+          .then(function () { return stamp(layer, wrongHand, 540, { wrong: true, color: '#ff8a8a' }); });
       });
       run = run.then(function () {
-        // demonstrate an OVERLAP: pull hand2 left onto hand1
-        s._hand2.style.left = (HAND_C[0] + 36 - HAND_BOX / 2) + 'px';
-        return say('gogo', 'Also, the hands should not be placed on top of each other.');
+        FX.sparkleBurst(485, HAND_TOP + HAND_BOX / 2, { count: 9, spread: 42, color: '#ff5a5a' });
+        return say('gogo', 'Oops! There is a GAP here. We must leave no gaps.');
       });
+      run = run.then(function () {
+        // OVERLAP: the next hand lands on top of the previous one
+        return glide(wrongHand, 580)
+          .then(function () { return stamp(layer, wrongHand, 580, { wrong: true, color: '#ff8a8a' }); });
+      });
+      run = run.then(function () {
+        FX.sparkleBurst(560, HAND_TOP + HAND_BOX / 2, { count: 9, spread: 42, color: '#ff5a5a' });
+        return say('gogo', 'And here they OVERLAP. Hands must not sit on top of each other.');
+      });
+      run = run.then(function () { if (wrongHand) { wrongHand.remove(); wrongHand = null; } });
 
       /* ===== "LET US RECALL" — genie recap, table cleared ============= */
       run = run.then(function () {
@@ -237,9 +297,13 @@ HS.Tutorial = (function () {
         return FX.wait(200);
       });
 
-      /* ===== E. CORRECT METHOD with labels =========================== */
+      /* ===== E. CORRECT METHOD (flush walk, impressions remain) ====== *
+       * One hand walks the edge, stretching to measure each span flush after
+       * the previous — no gaps, no overlaps — leaving faded impressions that
+       * stay visible to show the full sequence.                             */
+      var goodHand;
       run = run.then(function () {
-        // reset the demo: clear hands, keep table + guides
+        // reset the demo: clear the wrong impressions, keep table + guides
         UI.clear(layer);
         var chip = UI.LabelChip('Start from one end.');
         chip.style.top = '348px';
@@ -247,27 +311,29 @@ HS.Tutorial = (function () {
         // the chip's tail (at its horizontal centre) must point at the START
         // edge line — centre the chip over GUIDE.startX after measuring its width
         chip.style.left = (GUIDE.startX - chip.offsetWidth / 2) + 'px';
-        placeHand(layer, HAND_C[0]);
-        FX.sparkleBurst(HAND_C[0], HAND_TOP + 40, { count: 8, spread: 60, color: '#bfe39a' });
-        return say('gogo', 'Place the first hand at the starting point.');
+        goodHand = spawnMeasureHand(layer, HAND_C[0]);
+        return stamp(layer, goodHand, HAND_C[0])
+          .then(function () { return say('gogo', 'Place the first hand at the starting point.'); });
       });
       run = run.then(function () {
         if (s._chip) s._chip.remove();
         var chip = UI.LabelChip('No Gaps!');
         Object.assign(chip.style, { left: (HAND_C[1] - 30) + 'px', top: '360px' });
         s.appendChild(chip); s._chip = chip;
-        placeHand(layer, HAND_C[1]);
-        return say('gogo', 'Put the next hand right next to it. No gaps in between!');
+        return glide(goodHand, HAND_C[1])
+          .then(function () { return stamp(layer, goodHand, HAND_C[1]); })
+          .then(function () { return say('gogo', 'Put the next hand right next to it. No gaps!'); });
       });
       run = run.then(function () {
         if (s._chip) s._chip.remove();
         var chip = UI.LabelChip('No overlap!');
         Object.assign(chip.style, { left: (HAND_C[2] - 30) + 'px', top: '360px' });
         s.appendChild(chip); s._chip = chip;
-        placeHand(layer, HAND_C[2]);
-        FX.sparkleBurst(HAND_C[2], HAND_TOP + 40, { count: 8, spread: 60, color: '#bfe39a' });
-        return say('gogo', 'Put the next hand right next to it. No gaps in between!');
+        return glide(goodHand, HAND_C[2])
+          .then(function () { return stamp(layer, goodHand, HAND_C[2]); })
+          .then(function () { return say('gogo', 'And the next, flush again. No overlaps!'); });
       });
+      run = run.then(function () { if (goodHand) { goodHand.remove(); goodHand = null; } });
 
       /* ===== -> SELECT-TABLE (no standalone guess; the player now picks a
        *         table to measure in the Hall) ========================= */

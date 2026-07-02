@@ -59,7 +59,7 @@ HS.UI = (function () {
   /* ======================================================================
    * HANDSPAN  — the one reusable measurement unit
    * ----------------------------------------------------------------------
-   * Rendered as the orange hand artwork (assets/hand.png). The same unit is
+   * Rendered as the orange hand artwork (assets/hand.webp). The same unit is
    * used for the guess tray, the measuring lane, the fly-in measurement and
    * the final table markers, so the whole game speaks one visual language.
    *
@@ -74,16 +74,63 @@ HS.UI = (function () {
     var h = opts.h || 88;
     var variant = opts.variant || 'solid';
 
+    // Default unit is the vibrant hand.png artwork. Pass `anim:true` for the
+    // pose the measuring animation (handSpanAnimation) settles on — its exact
+    // last frame — so an impression left where the animation ends matches it
+    // pixel-for-pixel.
+    var anim = opts.anim === true;
+
     var wrap = el('div.handspan', { dataset: { variant: variant } });
+    if (anim) wrap.classList.add('handspan--anim');
     wrap.style.width = w + 'px';
     wrap.style.height = h + 'px';
 
-    wrap.appendChild(el('img.handspan__hand', { src: 'assets/hand.png', alt: '', draggable: 'false' }));
+    wrap.appendChild(el('img.handspan__hand', {
+      src: anim ? 'assets/handSpanHand.webp' : 'assets/hand.webp', alt: '', draggable: 'false'
+    }));
 
     if (opts.number != null) {
       wrap.appendChild(el('div.handspan__num', { text: String(opts.number) }));
     }
     return wrap;
+  }
+
+  /* ======================================================================
+   * MEASURE HAND  — the animated hand that stretches to measure one span
+   * (assets/handSpanAnimation.webm, transparent VP9). This is THE measuring
+   * animation, reused wherever a hand actively measures (the tutorial demo and
+   * the guess-phase preview). It settles on the open pose (handSpanHand.png),
+   * which the faded impressions reuse so they land exactly on the settle frame.
+   * ====================================================================== */
+  function MeasureHand(sizePx) {
+    var d = el('div.measure-hand');
+    if (sizePx) { d.style.width = sizePx + 'px'; d.style.height = sizePx + 'px'; }
+    var v = document.createElement('video');
+    v.className = 'measure-hand__vid';
+    v.src = 'assets/handSpanAnimation.webm';
+    v.muted = true; v.defaultMuted = true;
+    v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+    v.playsInline = true; v.preload = 'auto';
+    d.appendChild(v);
+    d._video = v;
+    return d;
+  }
+
+  // Play the stretch animation once (optionally faster). Resolves when the clip
+  // ends, with a safety timeout so a stalled decode never hangs the flow.
+  function playMeasureHand(node, rate) {
+    var v = node._video;
+    rate = rate || 1;
+    return new Promise(function (resolve) {
+      var settled = false;
+      function done() { if (settled) return; settled = true; v.removeEventListener('ended', done); resolve(); }
+      v.addEventListener('ended', done);
+      v.playbackRate = rate;
+      try { v.currentTime = 0; } catch (e) {}
+      var pr = v.play();
+      if (pr && pr.catch) pr.catch(function () {});
+      setTimeout(done, 1000 / rate + 450);
+    });
   }
 
   // Update an existing handspan's variant + optional number badge in place.
@@ -111,7 +158,7 @@ HS.UI = (function () {
     opts = opts || {};
     var w = opts.w || 360;
     var ratio = opts.ratio || TABLE_RATIO;     // height / width of the artwork
-    var src = opts.src || 'assets/Table.svg';
+    var src = opts.src || 'assets/Table.webp';
     var wrap = el('div.table');
     wrap.style.width = w + 'px';
     wrap.style.height = (w * ratio) + 'px';
@@ -186,7 +233,7 @@ HS.UI = (function () {
     opts = opts || {};
     var c = el('div.char char--gogo');
     if (opts.sack) c.classList.add('char--sack');
-    c.appendChild(el('img.char__img', { src: 'assets/gogo.png', alt: 'Gogo', draggable: 'false' }));
+    c.appendChild(el('img.char__img', { src: 'assets/gogo.webp', alt: 'Gogo', draggable: 'false' }));
     if (opts.sack) {
       // Santa-style sack drawn in CSS, slung on Gogo's back.
       c.appendChild(el('div.gogo-sack', null, [el('div.gogo-sack__tie')]));
@@ -245,11 +292,45 @@ HS.UI = (function () {
     return p;
   }
 
-  // Animated hand-cursor nudge (assets/handNudge.svg) to point at a target.
+  // Animated hand-cursor nudge (assets/handNudge.webp) to point at a target.
   function HandNudge() {
     var n = el('div.hand-nudge');
-    n.appendChild(el('img', { src: 'assets/handNudge.svg', alt: '', draggable: 'false' }));
+    n.appendChild(el('img', { src: 'assets/handNudge.webp', alt: '', draggable: 'false' }));
     return n;
+  }
+
+  // Reveal a hand-nudge ONLY after the user has been idle for `ms` (default 3s).
+  // Any pointer/keyboard activity hides it and restarts the countdown, so the
+  // hint only appears when the player seems stuck. Returns a stop() function;
+  // it also self-cleans once the node leaves the DOM (e.g. scene change).
+  function idleNudge(node, opts) {
+    opts = opts || {};
+    var ms = opts.ms || 5000;
+    var timer = null, stopped = false;
+    var events = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'];
+    node.style.display = 'none';
+    function stop() {
+      if (stopped) return;
+      stopped = true;
+      clearTimeout(timer);
+      events.forEach(function (e) { document.removeEventListener(e, reset); });
+    }
+    function show() {
+      if (stopped) return;
+      if (!document.body.contains(node)) { stop(); return; }
+      node.style.display = '';
+      if (opts.onShow) opts.onShow();
+    }
+    function reset() {
+      if (stopped) return;
+      if (!document.body.contains(node)) { stop(); return; }   // scene changed
+      node.style.display = 'none';
+      clearTimeout(timer);
+      timer = setTimeout(show, ms);
+    }
+    events.forEach(function (e) { document.addEventListener(e, reset, { passive: true }); });
+    timer = setTimeout(show, ms);
+    return stop;
   }
 
   // Big floating title chip (e.g. "Tutorial", "Round 1").
@@ -273,7 +354,7 @@ HS.UI = (function () {
   // who: 'gogo' | 'child'
   function TutorialBubble(opts) {
     opts = opts || {};
-    var avatarSrc = opts.who === 'child' ? 'assets/avatar_tara.png' : 'assets/avatar_gogo.png';
+    var avatarSrc = opts.who === 'child' ? 'assets/avatar_tara.webp' : 'assets/avatar_gogo.webp';
     var wrap = el('div.tbubble');
     wrap.appendChild(el('div.tbubble__avatar', null,
       [el('img', { src: avatarSrc, alt: '', draggable: 'false' })]));
@@ -307,7 +388,7 @@ HS.UI = (function () {
   function HandUnit(sizePx) {
     var d = el('div.hand-unit');
     if (sizePx) { d.style.width = sizePx + 'px'; d.style.height = sizePx + 'px'; }
-    d.appendChild(el('img', { src: 'assets/hand.png', alt: '', draggable: 'false' }));
+    d.appendChild(el('img', { src: 'assets/hand.webp', alt: '', draggable: 'false' }));
     return d;
   }
 
@@ -326,10 +407,27 @@ HS.UI = (function () {
   // a reveal() that animates them in (used together with an SFX).
   function MeasureGuide(startX, endX, top, height) {
     var g = el('div.measure-guide');
-    var a = el('div.measure-guide__line');
+    // start line draws its dash OUTWARD (to the left of startX) so it hugs the
+    // outside of the leg like the end line does — no overlap with the drop-zone.
+    var a = el('div.measure-guide__line measure-guide__line--start');
     Object.assign(a.style, { left: startX + 'px', top: top + 'px', height: height + 'px' });
     var b = el('div.measure-guide__line');
     Object.assign(b.style, { left: endX + 'px', top: top + 'px', height: height + 'px' });
+    g.appendChild(a); g.appendChild(b);
+    g.reveal = function () { a.classList.add('is-in'); b.classList.add('is-in'); };
+    return g;
+  }
+
+  // Two HORIZONTAL dashed guide lines (top & bottom) for vertical measuring —
+  // e.g. the height of a candle stand. Same reveal() contract.
+  function MeasureGuideH(x0, x1, topY, bottomY) {
+    var g = el('div.measure-guide');
+    function line(y) {
+      var l = el('div.measure-guide__line measure-guide__line--h');
+      Object.assign(l.style, { left: x0 + 'px', top: y + 'px', width: (x1 - x0) + 'px' });
+      return l;
+    }
+    var a = line(topY), b = line(bottomY);
     g.appendChild(a); g.appendChild(b);
     g.reveal = function () { a.classList.add('is-in'); b.classList.add('is-in'); };
     return g;
@@ -354,6 +452,8 @@ HS.UI = (function () {
     clear: clear,
     HandSpan: HandSpan,
     setHandSpan: setHandSpan,
+    MeasureHand: MeasureHand,
+    playMeasureHand: playMeasureHand,
     Table: Table,
     MeasuringStrip: MeasuringStrip,
     SpeechBubble: SpeechBubble,
@@ -363,6 +463,7 @@ HS.UI = (function () {
     Button: Button,
     TapToContinue: TapToContinue,
     HandNudge: HandNudge,
+    idleNudge: idleNudge,
     TitleChip: TitleChip,
     Heading: Heading,
     TutorialBubble: TutorialBubble,
@@ -371,6 +472,7 @@ HS.UI = (function () {
     HandUnit: HandUnit,
     HandPodium: HandPodium,
     MeasureGuide: MeasureGuide,
+    MeasureGuideH: MeasureGuideH,
     Vignette: Vignette,
     LabelChip: LabelChip
   };
