@@ -85,6 +85,35 @@ HS.FX = (function () {
     }
   }
 
+  /* ---- magic star burst (for Gogo's teleport poofs) ---------------------- *
+   * Same flight as sparkleBurst but the particles are glowing four-point
+   * STARS (clip-path) in magic golds/purples/whites — no square blocks.    */
+  var STAR_COLORS = ['#ffd54a', '#c77dff', '#ffffff', '#ffe9a8', '#e5b8ff'];
+  function starBurst(x, y, opts) {
+    opts = opts || {};
+    var n = opts.count || 14;
+    var spread = opts.spread || 110;
+    var layer = fxLayer();
+    for (var i = 0; i < n; i++) {
+      (function () {
+        var s = makeEl('p-star');
+        var ang = rand(0, Math.PI * 2);
+        var dist = rand(spread * 0.3, spread);
+        var size = rand(12, 26);
+        s.style.left = x + 'px';
+        s.style.top = y + 'px';
+        s.style.width = size + 'px';
+        s.style.height = size + 'px';
+        s.style.color = opts.color || pick(STAR_COLORS);
+        s.style.setProperty('--dx', (Math.cos(ang) * dist) + 'px');
+        s.style.setProperty('--dy', (Math.sin(ang) * dist - rand(0, 26)) + 'px');
+        s.style.animationDuration = rand(0.55, 0.95) + 's';
+        layer.appendChild(s);
+        setTimeout(function () { s.remove(); }, 1000);
+      })();
+    }
+  }
+
   /* ---- expanding ring --------------------------------------------------- */
   function ringBurst(x, y, color) {
     var r = makeEl('p-ring');
@@ -182,6 +211,7 @@ HS.FX = (function () {
     raf: raf,
     centerOf: centerOf,
     sparkleBurst: sparkleBurst,
+    starBurst: starBurst,
     ringBurst: ringBurst,
     confetti: confetti,
     floatStars: floatStars,

@@ -74,9 +74,9 @@ HS.Game = (function () {
   // Fade the current scene out, clear, run builder, fade in.
   function transitionTo(builder) {
     var s = scene();
-    s.style.transition = 'opacity 0.32s ease';
+    s.style.transition = 'opacity 0.6s ease';
     s.style.opacity = '0';
-    return FX.wait(320).then(function () {
+    return FX.wait(600).then(function () {
       UI.clear(s);
       spotlightOff();
       s.style.opacity = '0';

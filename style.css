@@ -507,9 +507,9 @@ html, body {
 .hall-carousel--unlit::before { opacity: 0; }
 .hall-carousel--unlit::after  { opacity: 0; animation: none; }
 .hall-carousel--unlit .select-glow { opacity: 0; animation: none; }
-.hall-carousel--flat .hall-card.is-center { left: 50%; transform: translateX(-50%) scale(0.62); }
-.hall-carousel--flat .hall-card.is-left  { left: 22%; opacity: 1; filter: none; transform: translateX(-50%) scale(0.62); }
-.hall-carousel--flat .hall-card.is-right { left: 78%; opacity: 1; filter: none; transform: translateX(-50%) scale(0.62); }
+.hall-carousel--flat .hall-card.is-center { left: 50%; transform: translateX(-50%) scale(0.85); }
+.hall-carousel--flat .hall-card.is-left  { left: 20%; opacity: 1; filter: none; transform: translateX(-50%) scale(0.85); }
+.hall-carousel--flat .hall-card.is-right { left: 80%; opacity: 1; filter: none; transform: translateX(-50%) scale(0.85); }
 
 /* a brief warm flash of the beam as the lights snap on */
 .lights-flash {
@@ -750,16 +750,16 @@ html, body {
 .tbubble__avatar img { width: 100%; height: 100%; display: block; border-radius: 50%; }
 .tbubble__bar {
   position: relative;
-  min-height: 78px;
+  min-height: 64px;
   display: flex; align-items: center;
-  padding: 10px 34px 10px 40px;
+  padding: 8px 28px 8px 36px;
   background: linear-gradient(160deg, #BE1BFF 0%, #9C109F 48%, #600186 100%);
   border: 4px solid var(--yellow);
   border-radius: 22px;
   box-shadow: var(--shadow-pop);
 }
 .tbubble__text {
-  color: #fef6f6; font-weight: 800; font-size: 33px; line-height: 1.12;
+  color: #fef6f6; font-weight: 800; font-size: 27px; line-height: 1.12;
   white-space: nowrap; letter-spacing: 0.3px;
 }
 .tbubble__tail {
@@ -775,23 +775,34 @@ html, body {
 .welcome-panel {
   position: absolute; left: 50%; top: 78px; transform: translateX(-50%);
   z-index: 30;
-  max-width: 700px; min-height: 92px;
-  display: flex; align-items: center; justify-content: center;
-  padding: 14px 46px;
-  background: linear-gradient(160deg, #BE1BFF 0%, #9C109F 48%, #600186 100%);
-  border: 5px solid var(--yellow);
-  border-radius: 26px;
-  box-shadow: var(--shadow-pop);
+  display: inline-block; max-width: 420px; box-sizing: border-box;
+  padding: 13px 24px 14px;
+  background: #7B219F;
+  border: 4px solid #fff;
+  border-radius: 20px;
+  box-shadow: 0 7px 14px rgba(35, 0, 45, 0.3);
   /* centred via translateX(-50%); use a pop that preserves it */
-  animation: panel-pop 0.4s cubic-bezier(.2,1.4,.5,1) both;
+  animation: panel-pop 0.42s cubic-bezier(.34,1.56,.64,1) both;
+}
+
+/* word-by-word reveal: each word pops in on a small stagger (see UI.fillWords) */
+.word-in {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(7px) scale(0.72);
+  animation: word-pop 0.34s cubic-bezier(.34,1.56,.64,1) forwards;
+}
+@keyframes word-pop {
+  to { opacity: 1; transform: none; }
 }
 @keyframes panel-pop {
   from { opacity: 0; transform: translateX(-50%) scale(0.7); }
   to   { opacity: 1; transform: translateX(-50%) scale(1); }
 }
 .welcome-panel__text {
-  color: #fff; font-weight: 800; font-size: 42px; text-align: center; line-height: 1.1;
-  text-shadow: 0 2px 0 rgba(0,0,0,0.18);
+  margin: 0; color: #fff; font-weight: 800; font-size: 24px; text-align: center; line-height: 1.16;
+  text-shadow: 0 2px 4px rgba(30, 0, 40, 0.35);
+  overflow-wrap: break-word;
 }
 /* --- GOGO SPEAKS: posed character + bubble whose tail points at it -------- */
 .gogo-char {
@@ -800,48 +811,74 @@ html, body {
   animation: float-char 3.6s ease-in-out infinite;
 }
 .gogo-char img { width: 100%; display: block; }
-.gogo-char--talk, .gogo-char--think, .gogo-char--show { width: 340px; }
+/* magic teleport: shrink-twist-fade out, bouncy pop back in (these classes
+   temporarily replace the idle float-char animation) */
+.gogo-char--poof-out { animation: gogo-poof-out 0.35s ease-in both; }
+.gogo-char--poof-in  { animation: gogo-poof-in 0.42s cubic-bezier(.2,1.4,.5,1) both; }
+@keyframes gogo-poof-out {
+  0%   { transform: scale(1) rotate(0deg); opacity: 1; filter: none; }
+  100% { transform: scale(0.1) rotate(14deg); opacity: 0; filter: blur(4px) brightness(1.6); }
+}
+@keyframes gogo-poof-in {
+  0%   { transform: scale(0.1) rotate(-14deg); opacity: 0; filter: blur(4px) brightness(1.6); }
+  70%  { transform: scale(1.1) rotate(2deg); opacity: 1; filter: none; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; filter: none; }
+}
+.gogo-char--talk, .gogo-char--think, .gogo-char--show { width: 380px; }
 /* wrongGogo's character fills its frame more, so it needs a narrower box to
    read as the SAME size as the other poses */
-.gogo-char--wrong { width: 280px; }
-.gogo-char--horizontal { width: 310px; animation: none; }   /* lounging narrator */
+.gogo-char--wrong { width: 315px; }
+.gogo-char--horizontal { width: 390px; animation: none; }   /* lounging narrator */
 
+/* Compact "thought box" that HUGS its text (no big empty panel): solid purple,
+   rotated-square tail pinned to the box, bouncy pop-in. */
+/* Figma DialogueBox style: purple fill + white stroke; the box body stretches
+   with its text while the SVG tail keeps its authored swoosh shape. */
 .say-bubble {
-  position: absolute; z-index: 34; max-width: 400px; min-height: 60px;
-  display: flex; align-items: center; justify-content: center;
-  padding: 14px 30px;
-  background: linear-gradient(160deg, #BE1BFF 0%, #9C109F 48%, #600186 100%);
-  border: 5px solid var(--yellow); border-radius: 24px;
-  box-shadow: var(--shadow-pop);
-  animation: bubble-pop 0.4s cubic-bezier(.2,1.4,.5,1) both;
+  position: absolute; z-index: 34; display: inline-block;
+  max-width: 300px; box-sizing: border-box;
+  padding: 13px 20px 14px;
+  background: #7B219F; border: 4px solid #fff; border-radius: 20px;
+  box-shadow: 0 7px 14px rgba(35, 0, 45, 0.3);
+  transform-origin: 30px 100%;
+  animation: gb-pop 0.42s cubic-bezier(.34,1.56,.64,1) both;
 }
 .say-bubble__text {
-  color: #fff; font-weight: 800; font-size: 30px; text-align: center; line-height: 1.16;
-  text-shadow: 0 2px 0 rgba(0,0,0,0.18);
+  margin: 0; font-weight: 800; font-size: 20px; line-height: 1.16;
+  text-align: center; color: #fff;
+  text-shadow: 0 2px 4px rgba(30, 0, 40, 0.35);
+  overflow-wrap: break-word;
 }
-.say-bubble__tail { position: absolute; width: 0; height: 0; }
-/* tail DOWN toward a Gogo standing below-right (bubble sits above the Gogo) */
-.say-bubble--down-right .say-bubble__tail {
-  bottom: -22px; right: 188px;
-  border-left: 20px solid transparent; border-right: 20px solid transparent;
-  border-top: 24px solid #7a0f9a;
-  filter: drop-shadow(0 4px 0 var(--yellow));
-}
-/* tail LEFT toward a Gogo in the top-left corner (bubble sits to its right) */
+.say-bubble__tail { position: absolute; }
+/* Gogo below-left -> the authored SVG swoosh tail; its seam patch overlaps the
+   bubble's white border so box + tail read as ONE shape */
 .say-bubble--left .say-bubble__tail {
-  left: -25px; top: 50%; transform: translateY(-50%);
-  border-top: 17px solid transparent; border-bottom: 17px solid transparent;
-  border-right: 26px solid #7a0f9a;
-  filter: drop-shadow(-4px 0 0 var(--yellow));
+  /* overlap only the bubble's BORDER band (not its fill) so the tail's white
+     stroke never shows inside the text area; the patch bridges the border */
+  left: 10px; bottom: -29px; width: 62px; height: 33px;
+}
+.say-bubble--left .say-bubble__tail svg { display: block; width: 100%; height: 100%; }
+/* Gogo BELOW-RIGHT of the bubble -> rotated-square tail on the bottom edge */
+.say-bubble--down-right .say-bubble__tail {
+  right: 26px; bottom: -13px; width: 19px; height: 19px;
+  background: #7B219F;
+  border-right: 4px solid #fff; border-bottom: 4px solid #fff;
+  border-bottom-right-radius: 5px;
+  transform: rotate(45deg);
+}
+@keyframes gb-pop {
+  0%   { opacity: 0; transform: scale(0.4); }
+  60%  { opacity: 1; transform: scale(1.05); }
+  100% { transform: scale(1); }
 }
 
 .welcome-panel__tail {
-  position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%);
-  width: 0; height: 0;
-  border-left: 22px solid transparent;
-  border-right: 22px solid transparent;
-  border-top: 26px solid #7a0f9a;
-  filter: drop-shadow(0 4px 0 var(--yellow));
+  position: absolute; left: 50%; bottom: -13px; margin-left: -10px;
+  width: 19px; height: 19px;
+  background: #7B219F;
+  border-right: 4px solid #fff; border-bottom: 4px solid #fff;
+  border-bottom-right-radius: 5px;
+  transform: rotate(45deg);
 }
 
 /* --- compact feedback bubble (success / try-again / clue screens) -------- *
@@ -849,30 +886,30 @@ html, body {
  * tail pointing DOWN at the genie so it reads as the genie speaking.        */
 .fb-bubble {
   position: absolute; top: 60px; z-index: 30;
-  max-width: 430px; min-height: 60px;
-  display: flex; align-items: center; justify-content: center;
-  padding: 14px 30px;
-  background: linear-gradient(160deg, #BE1BFF 0%, #9C109F 48%, #600186 100%);
-  border: 5px solid var(--yellow);
-  border-radius: 24px;
-  box-shadow: var(--shadow-pop);
-  animation: bubble-pop 0.4s cubic-bezier(.2,1.4,.5,1) both;
+  display: inline-block; max-width: 360px; box-sizing: border-box;
+  padding: 13px 22px 14px;
+  background: #7B219F;
+  border: 4px solid #fff;
+  border-radius: 20px;
+  box-shadow: 0 7px 14px rgba(35, 0, 45, 0.3);
+  animation: gb-pop 0.42s cubic-bezier(.34,1.56,.64,1) both;
 }
 .fb-bubble--left  { left: 110px; }
 .fb-bubble--right { right: 40px; }
 .fb-bubble__text {
-  color: #fff; font-weight: 800; font-size: 28px; text-align: center; line-height: 1.18;
-  text-shadow: 0 2px 0 rgba(0,0,0,0.18);
+  margin: 0; color: #fff; font-weight: 800; font-size: 21px; text-align: center; line-height: 1.18;
+  text-shadow: 0 2px 4px rgba(30, 0, 40, 0.35);
+  overflow-wrap: break-word;
 }
 .fb-bubble__tail {
-  position: absolute; bottom: -22px; width: 0; height: 0;
-  border-left: 20px solid transparent;
-  border-right: 20px solid transparent;
-  border-top: 24px solid #7a0f9a;
-  filter: drop-shadow(0 4px 0 var(--yellow));
+  position: absolute; bottom: -13px; width: 19px; height: 19px;
+  background: #7B219F;
+  border-right: 4px solid #fff; border-bottom: 4px solid #fff;
+  border-bottom-right-radius: 5px;
+  transform: rotate(45deg);
 }
-.fb-bubble--left  .fb-bubble__tail { left: 128px; }
-.fb-bubble--right .fb-bubble__tail { right: 128px; }
+.fb-bubble--left  .fb-bubble__tail { left: 70px; }
+.fb-bubble--right .fb-bubble__tail { right: 70px; }
 
 /* --- orange hand unit (handspan) ---------------------------------------- */
 .hand-unit { position: absolute; width: 127px; height: 127px; z-index: 22; }
@@ -1002,6 +1039,20 @@ html, body {
   0%   { opacity: 1; transform: translate(-50%,-50%) rotate(45deg) scale(1); }
   100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(180deg) scale(0.2); }
 }
+/* magic four-point star (Gogo's teleport poof) — a real ✦ shape, glowing */
+.p-star {
+  position: absolute;
+  background: currentColor;
+  clip-path: polygon(50% 0%, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0% 50%, 39% 39%);
+  filter: drop-shadow(0 0 6px currentColor);
+  animation: star-fly ease-out forwards;
+}
+@keyframes star-fly {
+  0%   { opacity: 1; transform: translate(-50%,-50%) rotate(0deg) scale(0.3); }
+  25%  { opacity: 1; transform: translate(calc(-50% + var(--dx)*0.25), calc(-50% + var(--dy)*0.25)) rotate(60deg) scale(1.15); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(200deg) scale(0.15); }
+}
+
 .p-ring {
   position: absolute; width: 20px; height: 20px; border-radius: 50%;
   border: 4px solid #FFD54A; transform: translate(-50%,-50%);

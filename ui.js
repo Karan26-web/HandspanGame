@@ -352,6 +352,21 @@ HS.UI = (function () {
   // Avatar bubble: circular head (yellow ring baked in) + purple bar.
   // (No angular pointer/tail — flat instruction panel.)
   // who: 'gogo' | 'child'
+  // Fill a text node with per-word spans that pop in ONE BY ONE (staggered CSS
+  // animation) so dialogue reads dynamically instead of appearing all at once.
+  function fillWords(node, text) {
+    UI_clearNode(node);
+    String(text || '').split(/\s+/).forEach(function (w, i) {
+      if (!w) return;
+      var sp = el('span.word-in', { text: w });
+      sp.style.animationDelay = (i * 0.11) + 's';
+      node.appendChild(sp);
+      node.appendChild(document.createTextNode(' '));
+    });
+    return node;
+  }
+  function UI_clearNode(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+
   function TutorialBubble(opts) {
     opts = opts || {};
     var avatarSrc = opts.who === 'child' ? 'assets/avatar_tara.webp' : 'assets/avatar_gogo.webp';
@@ -359,16 +374,16 @@ HS.UI = (function () {
     wrap.appendChild(el('div.tbubble__avatar', null,
       [el('img', { src: avatarSrc, alt: '', draggable: 'false' })]));
     var bar = el('div.tbubble__bar', null, [
-      el('span.tbubble__text', { text: opts.text || '' })
+      fillWords(el('span.tbubble__text'), opts.text)
     ]);
     wrap.appendChild(bar);
     return wrap;
   }
 
-  // Big welcome panel: purple rounded bar with a downward tail (genie speaks).
+  // Welcome panel: purple rounded bar with a downward tail (genie speaks).
   function WelcomePanel(text) {
     return el('div.welcome-panel', null, [
-      el('div.welcome-panel__text', { text: text }),
+      fillWords(el('div.welcome-panel__text'), text),
       el('div.welcome-panel__tail')
     ]);
   }
@@ -379,7 +394,7 @@ HS.UI = (function () {
   function FeedbackBubble(text, side) {
     var cls = 'div.fb-bubble ' + (side === 'right' ? 'fb-bubble--right' : 'fb-bubble--left');
     return el(cls, null, [
-      el('div.fb-bubble__text', { text: text }),
+      fillWords(el('div.fb-bubble__text'), text),
       el('div.fb-bubble__tail')
     ]);
   }
@@ -462,13 +477,62 @@ HS.UI = (function () {
     var img = charEl.querySelector('img');
     if (img) img.src = 'assets/' + (GOGO_POSE[pose] || 'gogo.webp');
   }
+  // ---- magic teleport: Gogo POOFS out in sparkles and POOFS back in --------
+  // vanish: sparkle burst + shrink-fade, then the element is hidden (kept in
+  // the DOM so it can be moved/re-posed while invisible).
+  function gogoVanish(charEl) {
+    return new Promise(function (res) {
+      if (!charEl || !document.body.contains(charEl)) { res(); return; }
+      var c = HS.FX.centerOf(charEl);
+      HS.FX.starBurst(c.x, c.y, { count: 16, spread: 100 });
+      HS.Audio.playSparkle();
+      charEl.classList.add('gogo-char--poof-out');
+      setTimeout(function () {
+        charEl.style.visibility = 'hidden';
+        charEl.classList.remove('gogo-char--poof-out');
+        res();
+      }, 360);
+    });
+  }
+  // appear: make visible with a bouncy poof-in + sparkles at the new spot.
+  function gogoAppear(charEl) {
+    return new Promise(function (res) {
+      if (!charEl || !document.body.contains(charEl)) { res(); return; }
+      charEl.style.visibility = '';
+      charEl.classList.add('gogo-char--poof-in');
+      var c = HS.FX.centerOf(charEl);
+      HS.FX.starBurst(c.x, c.y, { count: 16, spread: 100 });
+      HS.Audio.playSparkle();
+      setTimeout(function () { charEl.classList.remove('gogo-char--poof-in'); res(); }, 430);
+    });
+  }
+  // teleport: vanish at the current spot, `mutate()` (move / re-pose) while
+  // invisible, then appear at the new spot.
+  function gogoTeleport(charEl, mutate) {
+    return gogoVanish(charEl).then(function () {
+      if (mutate) mutate();
+      return gogoAppear(charEl);
+    });
+  }
+
   // Speech bubble with a tail pointing at the speaker.
   // tail: 'down-right' (bubble ABOVE a right-anchored Gogo) | 'left' (bubble to
   // the RIGHT of a left-anchored Gogo).
   function SayBubble(text, tail) {
     var b = el('div.say-bubble say-bubble--' + (tail || 'down-right'));
-    b.appendChild(el('div.say-bubble__text', { text: text || '' }));
-    b.appendChild(el('div.say-bubble__tail'));
+    b.appendChild(fillWords(el('div.say-bubble__text'), text));
+    var t = el('div.say-bubble__tail');
+    if ((tail || 'down-right') === 'left') {
+      // the exact Figma DialogueBox tail (swoosh + seam patch) as inline SVG —
+      // the box body is CSS (stretches with the text) while the tail keeps its
+      // authored shape at any size
+      t.innerHTML =
+        '<svg viewBox="16 250 170 90" preserveAspectRatio="xMinYMin meet">' +
+        '<path d="M28.626 332.331C36.5054 332.591 46.9562 332.662 55.0117 331.719C64.9956 330.549 70.5962 328.837 79.9199 326.803C87.3704 325.177 92.1394 324.521 99.7734 322.131C118.209 316.358 127.511 310.173 142.355 299.744C154.473 291.231 168.59 276.544 174.568 270.105C177.893 266.525 175.223 260.944 170.546 260.944H67.5908C64.5424 260.944 62.1222 263.398 62.0537 266.372C61.9565 270.61 61.4656 279.905 59.335 285.812C55.4453 296.595 50.8243 302.189 41.2656 310.574C36.8824 314.419 28.9726 319.319 27.4521 320.248L23.6533 321.781C18.3968 323.904 19.3307 331.954 25.4209 332.21L28.626 332.331Z" fill="#7B219F" stroke="white" stroke-width="7"/>' +
+        '<path d="M66 250L182 250L166 276H66V250Z" fill="#7B219F"/>' +
+        '</svg>';
+    }
+    b.appendChild(t);
     return b;
   }
 
@@ -502,6 +566,9 @@ HS.UI = (function () {
     TutorialBubble: TutorialBubble,
     GogoCharacter: GogoCharacter,
     setGogoPose: setGogoPose,
+    gogoVanish: gogoVanish,
+    gogoAppear: gogoAppear,
+    gogoTeleport: gogoTeleport,
     SayBubble: SayBubble,
     WelcomePanel: WelcomePanel,
     FeedbackBubble: FeedbackBubble,

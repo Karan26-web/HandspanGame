@@ -34,11 +34,11 @@ HS.Tutorial = (function () {
   // (horizontal) pose sits bigger & further right, so the bubble follows.
   // Waits for a tap.
   function placeGogo(gogo, pose) {
-    if (pose === 'horizontal') Object.assign(gogo.style, { left: '270px', top: '36px' });
-    else Object.assign(gogo.style, { left: '26px', top: '40px' });
+    if (pose === 'horizontal') Object.assign(gogo.style, { left: '270px', top: '-14px' });
+    else Object.assign(gogo.style, { left: '300px', top: '-6px' });   // standing gogo.webp
   }
   function bubblePos(pose) {
-    return pose === 'horizontal' ? { left: '606px', top: '96px' } : { left: '292px', top: '52px' };
+    return pose === 'horizontal' ? { left: '648px', top: '8px' } : { left: '664px', top: '50px' };
   }
   function say(h, s, gogo, text, pose) {
     UI.setGogoPose(gogo, pose);
@@ -90,20 +90,20 @@ HS.Tutorial = (function () {
 
       // Gogo introduces the tables from the top-left corner (persists across the
       // whole intro; its pose changes with each line).
-      var gogo = UI.GogoCharacter('horizontal');
-      placeGogo(gogo, 'horizontal');
+      var gogo = UI.GogoCharacter('talk');
+      placeGogo(gogo, 'talk');
       s.appendChild(gogo);
 
       var run = Promise.resolve();
-      run = run.then(function () { return say(h, s, gogo, 'Here are the tables.', 'horizontal'); });
-      run = run.then(function () { return say(h, s, gogo, "Let's measure how long each table is.", 'horizontal'); });
+      run = run.then(function () { return say(h, s, gogo, 'Here are the tables.', 'talk'); });
+      run = run.then(function () { return say(h, s, gogo, "Let's measure how long each table is.", 'talk'); });
 
       // ---- STEP 1: LIGHTS ON — the spotlight descends (SFX), tables stay put
       run = run.then(function () {
         A.playLightsOn();
-        // the lounging narrator steps away during the lights/recede transition
-        gogo.style.transition = 'opacity .3s ease';
-        gogo.style.opacity = '0';
+        // the lounging narrator magically POOFS away during the lights/recede
+        // transition (sparkles + shrink) and reappears for the select prompt
+        UI.gogoVanish(gogo);
         carousel.classList.remove('hall-carousel--unlit');   // beam + vignette fade in
         // a brief warm flash of the beam as the lights snap on
         var flash = el('div.lights-flash');
@@ -125,8 +125,8 @@ HS.Tutorial = (function () {
       // ---- FOCUS + SELECT the tutorial table ----------------------------
       run = run.then(function () {
         UI.setGogoPose(gogo, 'horizontal');   // lounging narrator, centred like the intro
-        placeGogo(gogo, 'horizontal');
-        gogo.style.opacity = '1';             // back on screen for the "select" prompt
+        placeGogo(gogo, 'horizontal');        // (repositioned while invisible)
+        UI.gogoAppear(gogo);                  // magic poof back in for the prompt
         var b = UI.SayBubble('Tap here to select this table.', 'left');
         Object.assign(b.style, bubblePos('horizontal'));
         s.appendChild(b);
