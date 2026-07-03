@@ -51,7 +51,10 @@ HS.Game = (function () {
   /* ---- background control ---------------------------------------------- */
   function setBackground(kind) {
     var bg = document.getElementById('bg');
-    var mod = kind === 'castle' ? 'bg--castle' : (kind === 'cloth' ? 'bg--cloth' : 'bg--play');
+    var mod = kind === 'castle' ? 'bg--castle'
+            : kind === 'cloth' ? 'bg--cloth'
+            : kind === 'single' ? 'bg--single'
+            : 'bg--play';
     bg.className = 'bg ' + mod;
   }
 

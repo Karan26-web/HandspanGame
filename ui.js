@@ -158,7 +158,7 @@ HS.UI = (function () {
     opts = opts || {};
     var w = opts.w || 360;
     var ratio = opts.ratio || TABLE_RATIO;     // height / width of the artwork
-    var src = opts.src || 'assets/Table.webp';
+    var src = opts.src || 'assets/Table.png';
     var wrap = el('div.table');
     wrap.style.width = w + 'px';
     wrap.style.height = (w * ratio) + 'px';
@@ -517,12 +517,14 @@ HS.UI = (function () {
 
   // Speech bubble with a tail pointing at the speaker.
   // tail: 'down-right' (bubble ABOVE a right-anchored Gogo) | 'left' (bubble to
-  // the RIGHT of a left-anchored Gogo).
+  // the RIGHT of a left-anchored Gogo) | 'right' (mirrored: bubble to the LEFT
+  // of a right-anchored Gogo, tail on his head).
   function SayBubble(text, tail) {
-    var b = el('div.say-bubble say-bubble--' + (tail || 'down-right'));
+    var kind = tail || 'down-right';
+    var b = el('div.say-bubble say-bubble--' + kind);
     b.appendChild(fillWords(el('div.say-bubble__text'), text));
     var t = el('div.say-bubble__tail');
-    if ((tail || 'down-right') === 'left') {
+    if (kind === 'left' || kind === 'right') {
       // the exact Figma DialogueBox tail (swoosh + seam patch) as inline SVG —
       // the box body is CSS (stretches with the text) while the tail keeps its
       // authored shape at any size

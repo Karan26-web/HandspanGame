@@ -31,7 +31,7 @@ HS.Rounds = (function () {
   // Table.svg (aspect ~0.404) letterboxes inside the 0.529-ratio box, so the
   // legs sit at ~0.855 of the box height, not ~0.965 — anchor by that so the
   // legs land on FLOOR_Y and meet the guide-line tops.
-  var BROWN = { src: 'assets/Table.webp', ratio: 350 / 662, name: 'brown', e0: 0.0375, e1: 0.9542, foot: 0.855 };
+  var BROWN = { src: 'assets/Table.png', ratio: 350 / 662, name: 'brown', e0: 0.0375, e1: 0.9542, foot: 0.855 };
   var TABLE_ART = [BROWN, BROWN, BROWN];
   function art(i) { return TABLE_ART[i % TABLE_ART.length]; }
 
@@ -283,7 +283,7 @@ HS.Rounds = (function () {
 
   // a single measure cycle for one table (guess on a faded track -> verify)
   function playRound(config, h, opts) {
-    h.setBackground('play');
+    h.setBackground('single');   // the individual-table room (BgmSingle)
     var spans = opts.spans;
 
     // The hand is a FIXED size; the table's width grows with its span count, so
@@ -292,7 +292,11 @@ HS.Rounds = (function () {
     var e0 = opts.e0 != null ? opts.e0 : 0.05;
     var e1 = opts.e1 != null ? opts.e1 : 0.95;
     var foot = opts.foot != null ? opts.foot : 0.99;  // leg-foot fraction of the art height
-    var HW = 70;                                      // constant flush hand width (a bit smaller)
+    // Hand width per round: the BIGGEST (8-span) table keeps the classic 70px
+    // hand / 611px width; the smaller tables get proportionally LARGER hands so
+    // they fill the room more, while still reading shorter than the 8-span one
+    // (graded target widths: 5 spans -> ~523px, 6 -> ~550px, 8 -> ~611px).
+    var HW = spans >= 8 ? 70 : Math.round(((611 - (8 - spans) * 30) * (e1 - e0)) / spans);
     var TRACK_W = HW * spans;                         // track length scales with spans
     var TABLE_W = TRACK_W / (e1 - e0);                // table width that fits the track
     var TABLE_LEFT = (FX.STAGE_W - TABLE_W) / 2;
@@ -310,7 +314,7 @@ HS.Rounds = (function () {
     // deferGuide: the tutorial reveals the guide lines ITSELF (a beat after the
     // table, with SFX) — the layer exposes revealGuide() for that.
     function buildStage(s, heading, deferGuide) {
-      s.appendChild(UI.Vignette());
+      // no vignette / blur here — the individual-table room stays clean & bright
       var table = UI.Table({ w: TABLE_W, src: opts.src, ratio: opts.ratio });
       Object.assign(table.style, { position: 'absolute', left: TABLE_LEFT + 'px', top: TABLE_TOP + 'px', zIndex: '5' });
       s.appendChild(table);
@@ -641,15 +645,15 @@ HS.Rounds = (function () {
         // Each pose's art has different transparent padding, so the bubble is
         // anchored to that pose's VISIBLE right edge — no floating gap on
         // narrow poses (e.g. ThinkGogo).
-        var DEMO_BUBBLE_X = { talk: 498, think: 424, show: 458, wrong: 420 };
+        var DEMO_BUBBLE_X = { talk: 430, think: 410, show: 420, wrong: 390 };
         function demoBubbleAt(pose) { return { left: (DEMO_BUBBLE_X[pose] || 498) + 'px', top: '34px' }; }
         // Gogo speaks; the bubble sits beside him with its tail pointing at him.
         // `pose` picks the asset by the kind of line. Auto-advances after `ms`,
         // or waits for a tap if ms is 0.
-        function demoLine(text, ms, pose, posOverride) {
+        function demoLine(text, ms, pose, posOverride, tail) {
           return new Promise(function (res) {
             if (teacher && pose) UI.setGogoPose(teacher, pose);
-            var b = UI.SayBubble(text, 'left');
+            var b = UI.SayBubble(text, tail || 'left');
             Object.assign(b.style, posOverride || demoBubbleAt(pose || 'talk'));
             s.appendChild(b);
             A.playDialogue();
@@ -665,15 +669,17 @@ HS.Rounds = (function () {
             Object.assign(teacher.style, { width: '250px', transition: '', left: (cx - 136) + 'px', top: '226px' });
           });
         }
-        // bubble slot above the hovering pointer-Gogo (corner tail on his head)
-        function pointBubbleAt(cx) { return { left: (cx + 24) + 'px', top: '104px' }; }
+        // bubble slot right BESIDE the hovering pointer-Gogo's head (turban top
+        // sits ~290px when he hovers at top:226) — at head height on his right,
+        // tail curving down onto his face
+        function pointBubbleAt(cx) { return { left: (cx + 92) + 'px', top: '246px' }; }
         // after pointing, Gogo vanishes and REAPPEARS ON THE RIGHT to say "No!"
         function noFromRight() {
           return UI.gogoTeleport(teacher, function () {
             UI.setGogoPose(teacher, 'wrong');
             // sized to visually MATCH the small pointing Gogo (not the full 315px)
             Object.assign(teacher.style, { width: '215px', transition: '', left: '910px', top: '240px' });
-          }).then(function () { return verdict('No!', false, { left: '1006px', top: '126px' }); });
+          }).then(function () { return verdict('No!', false, { right: '300px', top: '238px' }, 'right'); });
         }
         // teleport the teacher back to his corner
         function gogoHome(pose) {
@@ -685,10 +691,10 @@ HS.Rounds = (function () {
         // "No!" / "Yes!" is Gogo answering his own question — same purple bubble
         // pointing at him (NOT a separate coloured badge); the sound conveys
         // right vs wrong. `good` also picks a matching pose.
-        function verdict(text, good, posOverride) {
+        function verdict(text, good, posOverride, tail) {
           return new Promise(function (res) {
             if (teacher) UI.setGogoPose(teacher, good ? 'talk' : 'wrong');
-            var b = UI.SayBubble(text, 'left');
+            var b = UI.SayBubble(text, tail || 'left');
             Object.assign(b.style, posOverride || demoBubbleAt(good ? 'talk' : 'wrong'));
             s.appendChild(b);
             if (good) A.playSuccess(); else A.playWrong();
@@ -729,22 +735,31 @@ HS.Rounds = (function () {
           // (1) show the drag gesture with a faded ghost hand travelling to & fro
           seq = seq.then(function () {
             return new Promise(function (res) {
-              if (teacher) UI.setGogoPose(teacher, 'show');
-              var b = UI.SayBubble("Let's drag a handspan from here to here.", 'left');
-              Object.assign(b.style, demoBubbleAt('show'));
-              s.appendChild(b); A.playDialogue();
-              // the arrowhead lands INSIDE the first square, marking the drop spot
-              var arr = makeArrow(REST.left + HW, REST.top + 6, L0 + HW * 0.35, HAND_TOP + HW / 2);
-              s.appendChild(arr);
+              var b, arr;
               var c = Promise.resolve();
-              // Gogo teleports down BESIDE THE HANDSPAN ("from here"), a smaller
-              // flying pose pointing at it...
+              // Gogo teleports down BESIDE THE HANDSPAN ("from here") FIRST, a
+              // smaller flying pose pointing at it...
               c = c.then(function () {
                 return UI.gogoTeleport(teacher, function () {
                   UI.setGogoPose(teacher, 'horizontal');
                   Object.assign(teacher.style, { width: '250px', left: '16px', top: '330px' });
                 });
-              }).then(function () { return FX.wait(500); });
+              });
+              // ...and only then his line pops up RIGHT AT HIS HEAD down there
+              // (tail tip on his turban). It stays just long enough to read...
+              c = c.then(function () {
+                b = UI.SayBubble("Let's drag a handspan from here to here.", 'left');
+                Object.assign(b.style, { left: '170px', top: '272px' });
+                s.appendChild(b); A.playDialogue();
+                // the arrowhead lands INSIDE the first square, marking the drop spot
+                arr = makeArrow(REST.left + HW, REST.top + 6, L0 + HW * 0.35, HAND_TOP + HW / 2);
+                s.appendChild(arr);
+                return FX.wait(2000);
+              });
+              // ...and goes AWAY the moment the ghost animation begins
+              c = c.then(function () {
+                if (b) { b.remove(); b = null; }
+              });
               // ...then flies WITH the faded hand on EVERY pass — Gogo traces
               // the here-to-here path in step with each ghost iteration.
               function glideTeacher(x, y, ms) {
@@ -780,7 +795,7 @@ HS.Rounds = (function () {
               c.then(function () {
                 if (ghost) { ghost.style.transition = 'opacity .3s ease'; ghost.style.opacity = '0'; }
                 arr.remove();
-                setTimeout(function () { if (ghost) ghost.remove(); b.remove(); res(); }, 320);
+                setTimeout(function () { if (ghost) ghost.remove(); if (b) b.remove(); res(); }, 320);
               });
             });
           });
@@ -814,20 +829,22 @@ HS.Rounds = (function () {
           // Same pattern as hand 1: the pointing (horizontal) Gogo hovers over
           // the hand in question, and the "No!" + rule come from the right side.
           var OVERLAP_CX = OVERLAP + HW / 2, GAP_CX = GAP + HW / 2, L1_CX = L1 + HW / 2;
-          var RIGHT_BUBBLE = { left: '1006px', top: '126px' };
+          // rule lines sit BESIDE the right-side Gogo's head (to his LEFT, with
+          // the mirrored tail on him) — right-anchored so any text width fits
+          var RIGHT_BUBBLE = { right: '300px', top: '226px' };
           var hand2;
           seq = seq.then(function () { return demoLine("Let's drag the next handspan.", 0, 'show'); });
           seq = seq.then(function () { hand2 = demoHand(false); A.playWhoosh(); return moveArc(hand2, OVERLAP, HAND_TOP, 1300); });
           seq = seq.then(function () { return pointGogoAt(OVERLAP_CX); });
           seq = seq.then(function () { return demoLine('Can we keep it here?', 2300, null, pointBubbleAt(OVERLAP_CX)); });
           seq = seq.then(function () { return noFromRight(); });
-          seq = seq.then(function () { return demoLine('Handspans must not overlap.', 2900, null, RIGHT_BUBBLE); });
+          seq = seq.then(function () { return demoLine('Handspans must not overlap.', 2900, null, RIGHT_BUBBLE, 'right'); });
           seq = seq.then(function () { return FX.wait(1000); });
           seq = seq.then(function () { A.playWhoosh(); return moveTo(hand2, GAP, HAND_TOP, 950); });
           seq = seq.then(function () { return pointGogoAt(GAP_CX); });
           seq = seq.then(function () { return demoLine('Then can we keep it here?', 2300, null, pointBubbleAt(GAP_CX)); });
           seq = seq.then(function () { return noFromRight(); });
-          seq = seq.then(function () { return demoLine('There must be no gap between two handspans.', 2900, null, RIGHT_BUBBLE); });
+          seq = seq.then(function () { return demoLine('There must be no gap between two handspans.', 2900, null, RIGHT_BUBBLE, 'right'); });
           seq = seq.then(function () { return FX.wait(1000); });
           seq = seq.then(function () { A.playWhoosh(); return moveTo(hand2, L1, HAND_TOP, 850); });
           seq = seq.then(function () { return pointGogoAt(L1_CX); });

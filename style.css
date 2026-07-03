@@ -93,6 +93,8 @@ html, body {
 .bg--play, .bg--castle { /* same uniform room background */ }
 /* the cloth flow uses a different room (Bgm2) */
 .bg.bg--cloth { background-image: url("assets/Bgm2.webp"); }
+/* the individual-table measuring screen uses its own room (BgmSingle) */
+.bg.bg--single { background-image: url("assets/BgmSingle.webp"); }
 
 /* ============================================================================
  * BOOT / TAP TO PLAY
@@ -361,24 +363,27 @@ html, body {
   transition: transform 0.42s cubic-bezier(.3,1.05,.4,1), opacity 0.42s ease, filter 0.42s ease, left 0.42s cubic-bezier(.3,1.05,.4,1);
   cursor: pointer; will-change: transform, filter, opacity;
 }
-/* SELECTED table — sharp, a touch brighter, lifted forward with a soft shadow */
+/* SELECTED table — sharp, a touch brighter, lifted forward with a soft shadow.
+   Scales UP from the flat showcase (1.12) so "coming forward" reads as growth. */
 .hall-card.is-center {
   z-index: 5;
-  transform: translateX(-50%) scale(1);
+  transform: translateX(-50%) scale(1.3);
   filter: brightness(1.06) drop-shadow(0 22px 26px rgba(45,22,6,0.42));
 }
-/* NON-selected tables recede: smaller, blurred, dimmed, desaturated, no glow */
+/* NON-selected tables sit BESIDE the hero (carousel row, like a vehicle-select
+   screen): flanking the edges at a similar eye level — lifted slightly so they
+   don't read as "sunk into the floor" — a bit smaller, softly dimmed/blurred. */
 .hall-card.is-left, .hall-card.is-right {
-  opacity: 0.5;
-  filter: blur(3px) brightness(0.55) saturate(0.7) grayscale(0.12);
+  opacity: 0.62;
+  filter: blur(2px) brightness(0.7) saturate(0.8) grayscale(0.1);
 }
-.hall-card.is-left  { z-index: 2; left: 15%; transform: translateX(-50%) scale(0.48); }
-.hall-card.is-right { z-index: 3; left: 85%; transform: translateX(-50%) scale(0.48); }
+.hall-card.is-left  { z-index: 2; left: 12%; transform: translateX(-50%) translateY(-36px) scale(0.62); }
+.hall-card.is-right { z-index: 3; left: 88%; transform: translateX(-50%) translateY(-36px) scale(0.62); }
 /* side tables lift toward the player on hover so they read as interactive */
 .hall-card.is-left:not(.hall-card--done):hover,
 .hall-card.is-right:not(.hall-card--done):hover {
-  opacity: 0.9; filter: blur(1px) brightness(0.85) saturate(0.9);
-  transform: translateX(-50%) scale(0.55);
+  opacity: 0.9; filter: blur(0.5px) brightness(0.9) saturate(0.9);
+  transform: translateX(-50%) translateY(-36px) scale(0.68);
 }
 
 /* a measured table is disabled (greyed) and shows its length */
@@ -504,12 +509,26 @@ html, body {
  *             blur/dim. Remove it => the sides recede & blur (selection look).
  * They start applied together; the tutorial removes --unlit first (lights on
  * with SFX), then --flat a beat later (tables move back). */
+/* tutorial recede step: the centre-forward / sides-back move plays out in
+   extra-slow motion so the child can follow which table comes forward */
+.hall-carousel--slowmo .hall-card {
+  transition: transform 1.8s cubic-bezier(.3,.9,.35,1), opacity 1.8s ease,
+              filter 1.8s ease, left 1.8s cubic-bezier(.3,.9,.35,1);
+}
 .hall-carousel--unlit::before { opacity: 0; }
 .hall-carousel--unlit::after  { opacity: 0; animation: none; }
 .hall-carousel--unlit .select-glow { opacity: 0; animation: none; }
-.hall-carousel--flat .hall-card.is-center { left: 50%; transform: translateX(-50%) scale(0.85); }
-.hall-carousel--flat .hall-card.is-left  { left: 20%; opacity: 1; filter: none; transform: translateX(-50%) scale(0.85); }
-.hall-carousel--flat .hall-card.is-right { left: 80%; opacity: 1; filter: none; transform: translateX(-50%) scale(0.85); }
+/* Flat showcase composition: ShowingGogo presents from the LEFT, the three
+   tables line up on the RIGHT in size order. With finalTables [6,5,8] and the
+   5-span centred, the classes map to fixed slots: is-center=5 (smallest),
+   is-left=6 (middle), is-right=8 (longest). */
+/* The art keeps ~14.5% transparent padding under the visible feet, so wider
+   cards float their legs higher; the per-slot translateY aligns ALL THREE leg
+   baselines on the same floor line, lifted so every tabletop (even the small
+   5-span one) rises above the wall/floor edge. */
+.hall-carousel--flat .hall-card.is-center { left: 34.5%; transform: translateX(-50%) translateY(-40px) scale(0.9); }
+.hall-carousel--flat .hall-card.is-left  { left: 57%; opacity: 1; filter: none; transform: translateX(-50%) translateY(-36px) scale(0.9); }
+.hall-carousel--flat .hall-card.is-right { left: 84.5%; opacity: 1; filter: none; transform: translateX(-50%) translateY(-29px) scale(0.9); }
 
 /* a brief warm flash of the beam as the lights snap on */
 .lights-flash {
@@ -858,6 +877,13 @@ html, body {
   left: 10px; bottom: -29px; width: 62px; height: 33px;
 }
 .say-bubble--left .say-bubble__tail svg { display: block; width: 100%; height: 100%; }
+/* Gogo below-RIGHT of the bubble -> the SAME authored swoosh tail, mirrored */
+.say-bubble--right { transform-origin: calc(100% - 30px) 100%; }
+.say-bubble--right .say-bubble__tail {
+  right: 10px; bottom: -29px; width: 62px; height: 33px;
+  transform: scaleX(-1);
+}
+.say-bubble--right .say-bubble__tail svg { display: block; width: 100%; height: 100%; }
 /* Gogo BELOW-RIGHT of the bubble -> rotated-square tail on the bottom edge */
 .say-bubble--down-right .say-bubble__tail {
   right: 26px; bottom: -13px; width: 19px; height: 19px;

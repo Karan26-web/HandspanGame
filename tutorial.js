@@ -24,7 +24,7 @@ HS.Tutorial = (function () {
 
   // same brown artwork as every table; cards are sized by span count so a
   // longer table genuinely looks longer (matches the Hall carousel).
-  var TABLE_SRC = 'assets/Table.webp';
+  var TABLE_SRC = 'assets/Table.png';
   var TABLE_RATIO = 350 / 662;
   var CARD_E0 = 0.0375, CARD_E1 = 0.9542;         // outer leg-foot fractions
   function cardWidth(spans) { return (50 * spans) / (CARD_E1 - CARD_E0); }
@@ -35,10 +35,14 @@ HS.Tutorial = (function () {
   // Waits for a tap.
   function placeGogo(gogo, pose) {
     if (pose === 'horizontal') Object.assign(gogo.style, { left: '270px', top: '-14px' });
+    else if (pose === 'show') Object.assign(gogo.style, { left: '-4px', top: '120px' });  // presenting from the LEFT
     else Object.assign(gogo.style, { left: '300px', top: '-6px' });   // standing gogo.webp
   }
   function bubblePos(pose) {
-    return pose === 'horizontal' ? { left: '648px', top: '8px' } : { left: '664px', top: '50px' };
+    // hugging the head: the tail tip lands right beside Gogo's turban/ear
+    if (pose === 'horizontal') return { left: '648px', top: '8px' };
+    if (pose === 'show') return { left: '182px', top: '84px' };
+    return { left: '560px', top: '10px' };
   }
   function say(h, s, gogo, text, pose) {
     UI.setGogoPose(gogo, pose);
@@ -88,38 +92,44 @@ HS.Tutorial = (function () {
       }
       layout();
 
-      // Gogo introduces the tables from the top-left corner (persists across the
-      // whole intro; its pose changes with each line).
-      var gogo = UI.GogoCharacter('talk');
-      placeGogo(gogo, 'talk');
+      // Gogo PRESENTS the tables from the left side (ShowingGogo, open palm
+      // sweeping toward the row of tables on the right).
+      var gogo = UI.GogoCharacter('show');
+      placeGogo(gogo, 'show');
       s.appendChild(gogo);
 
       var run = Promise.resolve();
-      run = run.then(function () { return say(h, s, gogo, 'Here are the tables.', 'talk'); });
-      run = run.then(function () { return say(h, s, gogo, "Let's measure how long each table is.", 'talk'); });
+      run = run.then(function () { return say(h, s, gogo, 'Here are the tables.', 'show'); });
+      run = run.then(function () { return say(h, s, gogo, "Let's measure how long each table is.", 'show'); });
 
-      // ---- STEP 1: LIGHTS ON — the spotlight descends (SFX), tables stay put
+      // ---- STEP 1: THE TABLES MOVE — the centre table comes FORWARD while the
+      // side tables drift back into the background. VERY slow & readable.
+      run = run.then(function () {
+        // the presenting narrator magically POOFS away first (sparkles + shrink)
+        // and reappears for the select prompt
+        UI.gogoVanish(gogo);
+        return FX.wait(450);
+      });
+      run = run.then(function () {
+        A.playWhoosh();
+        carousel.classList.add('hall-carousel--slowmo');      // extra-slow glide
+        carousel.classList.remove('hall-carousel--flat');     // sides recede & blur, centre forward
+        return FX.wait(2100);   // let the slow move fully settle
+      });
+
+      // ---- STEP 2: only THEN the spotlight falls onto the centre table (SFX)
       run = run.then(function () {
         A.playLightsOn();
-        // the lounging narrator magically POOFS away during the lights/recede
-        // transition (sparkles + shrink) and reappears for the select prompt
-        UI.gogoVanish(gogo);
+        carousel.classList.remove('hall-carousel--slowmo');
         carousel.classList.remove('hall-carousel--unlit');   // beam + vignette fade in
+        cards[center]._table.classList.add('table--glow');   // centre gets focus brackets
         // a brief warm flash of the beam as the lights snap on
         var flash = el('div.lights-flash');
         s.appendChild(flash);
         requestAnimationFrame(function () { flash.classList.add('is-on'); });
         setTimeout(function () { flash.classList.remove('is-on'); }, 320);
         setTimeout(function () { flash.remove(); }, 760);
-        return FX.wait(850);   // hold on the lit room before anything moves
-      });
-
-      // ---- STEP 2: the side tables move back & blur, centre comes forward
-      run = run.then(function () {
-        A.playWhoosh();
-        carousel.classList.remove('hall-carousel--flat');     // sides recede & blur
-        cards[center]._table.classList.add('table--glow');    // centre gets focus brackets
-        return FX.wait(550);   // let the recede settle before the prompt
+        return FX.wait(1100);   // hold on the lit centre before the prompt
       });
 
       // ---- FOCUS + SELECT the tutorial table ----------------------------
