@@ -96,15 +96,17 @@ HS.Game = (function () {
     return new Promise(function (resolve) {
       var s = scene();
       var catcher = el('div.tap-catcher');
-      var hint = el('div.tap-hint', { text: 'tap to continue' });
+      var btn = UI.NextButton();
       s.appendChild(catcher);
-      s.appendChild(hint);
-      catcher.addEventListener('click', function () {
+      s.appendChild(btn);
+      var advance = function () {
         A.playClick();
         catcher.remove();
-        hint.remove();
+        btn.remove();
         resolve();
-      });
+      };
+      catcher.addEventListener('click', advance);
+      btn.addEventListener('click', advance);
     });
   }
 
@@ -194,17 +196,20 @@ HS.Game = (function () {
         if (opts.autoMs) {
           setTimeout(done, opts.autoMs);
         } else {
-          // No button: tapping anywhere advances. A subtle hint invites it.
+          // Pulsing arrow button invites the tap; tapping anywhere also
+          // advances (kid-friendly catcher behind it).
           var catcher = el('div.tap-catcher');
-          var hint = el('div.tap-hint', { text: 'tap to continue' });
+          var btn = UI.NextButton();
           host.appendChild(catcher);
-          host.appendChild(hint);
-          catcher.addEventListener('click', function () {
+          host.appendChild(btn);
+          var advance = function () {
             A.playClick();
             catcher.remove();
-            hint.remove();
+            btn.remove();
             done();
-          });
+          };
+          catcher.addEventListener('click', advance);
+          btn.addEventListener('click', advance);
         }
       });
     });
@@ -457,9 +462,10 @@ HS.Game = (function () {
       var bgEl = document.getElementById('bg');
       bgEl.classList.add('tut-blur');
 
-      // genie, centred
+      // genie, centred (the art's visible body is offset inside its frame, so
+      // left is chosen to put the VISIBLE centre exactly on stage centre)
       var genie = UI.Gogo();
-      Object.assign(genie.style, { left: '354px', top: '128px', width: '520px', zIndex: '10' });
+      Object.assign(genie.style, { left: '362px', top: '78px', width: '520px', zIndex: '10' });
       s.appendChild(genie);
 
       function welcome(text) {

@@ -283,15 +283,6 @@ HS.UI = (function () {
     return b;
   }
 
-  // "Tap to continue" pill (top-right in dialogue scenes).
-  function TapToContinue(onTap) {
-    var p = el('button.tap-continue', {
-      type: 'button',
-      on: { click: function () { HS.Audio.playClick(); onTap && onTap(); } }
-    }, ['Tap to continue ', el('span.tap-continue__arrow', { text: '➜' })]);
-    return p;
-  }
-
   // Animated hand-cursor nudge (assets/handNudge.webp) to point at a target.
   function HandNudge() {
     var n = el('div.hand-nudge');
@@ -380,12 +371,13 @@ HS.UI = (function () {
     return wrap;
   }
 
-  // Welcome panel: purple rounded bar with a downward tail (genie speaks).
+  // Welcome dialogue: the Figma DialogueBox (say-bubble) with its swoosh tail
+  // aimed down-left at the genie's head, so it reads as Gogo speaking rather
+  // than an instruction panel.
   function WelcomePanel(text) {
-    return el('div.welcome-panel', null, [
-      fillWords(el('div.welcome-panel__text'), text),
-      el('div.welcome-panel__tail')
-    ]);
+    var b = SayBubble(text, 'left');
+    b.classList.add('say-bubble--welcome');
+    return b;
   }
 
   // Compact feedback bubble for the success / try-again / clue screens. It is
@@ -538,6 +530,14 @@ HS.UI = (function () {
     return b;
   }
 
+  // Round pulsing "next" arrow button — the tap-to-advance affordance shown
+  // once a dialogue has finished typing.
+  function NextButton() {
+    var b = el('button.next-arrow', { type: 'button', 'aria-label': 'Continue' });
+    b.appendChild(el('span.next-arrow__icon', { text: '➜' }));
+    return b;
+  }
+
   // Small purple call-out chip ("Start from one end.", "No Gaps!", ...).
   function LabelChip(text) {
     return el('div.label-chip', null, [
@@ -560,7 +560,6 @@ HS.UI = (function () {
     Gogo: Gogo,
     Tara: Tara,
     Button: Button,
-    TapToContinue: TapToContinue,
     HandNudge: HandNudge,
     idleNudge: idleNudge,
     TitleChip: TitleChip,
@@ -572,6 +571,7 @@ HS.UI = (function () {
     gogoAppear: gogoAppear,
     gogoTeleport: gogoTeleport,
     SayBubble: SayBubble,
+    NextButton: NextButton,
     WelcomePanel: WelcomePanel,
     FeedbackBubble: FeedbackBubble,
     HandUnit: HandUnit,

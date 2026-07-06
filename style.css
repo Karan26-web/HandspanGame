@@ -82,6 +82,7 @@ html, body {
 .bg {
   position: absolute; inset: 0; z-index: 0; overflow: hidden;
   background: url("assets/Bgm.webp") center center / cover no-repeat;
+  transition: filter 0.7s ease;   /* smooth in/out of the .tut-blur room fade */
 }
 /* A subtle vignette to help white/dark UI read against the warm wall. */
 .bg::after {
@@ -179,32 +180,32 @@ html, body {
 }
 .btn--green:active { box-shadow: 0 3px 0 #1f8a33, var(--shadow-soft); }
 
-/* tap-to-continue pill */
-.tap-continue {
-  position: absolute; top: 26px; right: 30px; z-index: 30;
-  font-family: inherit; font-weight: 800; font-size: 20px; color: #fff;
-  padding: 12px 22px; border: none; border-radius: 999px; cursor: pointer;
-  background: linear-gradient(180deg, var(--purple-3), var(--purple-1));
-  box-shadow: 0 6px 0 #5a157a, var(--shadow-soft);
-  animation: nudge-x 1.8s ease-in-out infinite;
-}
-.tap-continue:hover { filter: brightness(1.08); }
-.tap-continue__arrow { display: inline-block; animation: nudge-x 1.2s ease-in-out infinite; }
-@keyframes nudge-x { 0%,100%{ transform: translateX(0);} 50%{ transform: translateX(5px);} }
-
-/* tap-anywhere-to-continue: invisible catcher + subtle hint (no button) */
+/* tap-to-continue: invisible full-screen catcher + a round pulsing arrow
+   button (bottom-right) that invites the tap */
 .tap-catcher { position: absolute; inset: 0; z-index: 50; cursor: pointer; }
-.tap-hint {
-  position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
-  z-index: 51; pointer-events: none;
-  color: #fff; font-weight: 800; font-size: 20px; letter-spacing: 0.5px;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
-  animation: hint-bob 1.3s ease-in-out infinite;
+.next-arrow {
+  position: absolute; right: 34px; bottom: 30px; z-index: 51;
+  width: 78px; height: 78px;
+  border: 5px solid #fff; border-radius: 50%; cursor: pointer;
+  background: linear-gradient(180deg, var(--yellow), var(--orange-1));
+  box-shadow: 0 6px 0 #c96f12, var(--shadow-soft);
+  display: flex; align-items: center; justify-content: center;
+  animation: arrow-pulse 1.3s ease-in-out infinite;
 }
-.tap-hint::after { content: "  ➜"; }
-@keyframes hint-bob {
-  0%,100% { transform: translateX(-50%) translateY(0); opacity: 0.65; }
-  50%     { transform: translateX(-50%) translateY(-5px); opacity: 1; }
+.next-arrow:hover { filter: brightness(1.08); }
+.next-arrow:active { box-shadow: 0 3px 0 #c96f12, var(--shadow-soft); }
+.next-arrow__icon {
+  font-size: 36px; line-height: 1; color: #fff;
+  text-shadow: 0 2px 4px rgba(120, 60, 0, 0.45);
+  animation: arrow-nudge 1.3s ease-in-out infinite;
+}
+@keyframes arrow-pulse {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%      { transform: scale(1.12) rotate(-4deg); }
+}
+@keyframes arrow-nudge {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(5px); }
 }
 
 /* ============================================================================
@@ -323,6 +324,12 @@ html, body {
   filter: drop-shadow(0 18px 18px rgba(60,30,10,0.22));
   pointer-events: none;
 }
+/* the SMALLEST + MIDDLE tables get longer legs (vertical stretch about their
+   feet) so every tabletop clears the wall's skirting bar while the heights
+   still read ascending (small < middle < large); anchoring the stretch at
+   the feet keeps them planted on the floor line in every carousel state */
+.table--tall .table__img { transform: scaleY(1.22); transform-origin: 50% 88%; }
+.table--tall-mid .table__img { transform: scaleY(1.15); transform-origin: 50% 88%; }
 /* Centre-table highlight: glowing L-shaped CORNER BRACKETS framing the table
    (instead of a full square) ... */
 .table--glow::before {
@@ -386,6 +393,20 @@ html, body {
   transform: translateX(-50%) translateY(-36px) scale(0.68);
 }
 
+/* fixed-sequence hall (flow 1): side tables are never selectable, so they
+   don't invite interaction — no pointer cursor, no hover lift */
+.hall-carousel--fixed .hall-card { cursor: default; }
+.hall-carousel--fixed .hall-card.is-center:not(.hall-card--done) { cursor: pointer; }
+.hall-carousel--fixed .hall-card.is-left:hover,
+.hall-carousel--fixed .hall-card.is-right:hover {
+  opacity: 0.62;
+  filter: blur(2px) brightness(0.7) saturate(0.8) grayscale(0.1);
+  transform: translateX(-50%) translateY(-36px) scale(0.62);
+}
+/* entrance recap: the just-measured card holds the spotlight, bright (not
+   greyed like a normal done card) so its "N handspans" chip reads clearly */
+.hall-card--done.hall-card--recap.is-center { filter: brightness(1.05); animation: none; }
+
 /* a measured table is disabled (greyed) and shows its length */
 .hall-card--done { filter: grayscale(0.9) brightness(0.78); cursor: default; }
 /* a measured table stays visibly disabled (greyed & dim) even when it scrolls
@@ -421,11 +442,13 @@ html, body {
   animation: float-char 3.6s ease-in-out infinite;
 }
 .feedback-gogo--left { left: 94px; }
-.feedback-gogo--right { right: 24px; }
+.feedback-gogo--right { right: 100px; }
 /* Per-image sizing: the success gif is tightly cropped (much taller per px) so
    it gets a smaller width to read as the SAME character size as the others.
    Each genie is lifted (bottom offset) so its head sits just under the bubble. */
-.feedback-gogo--success { width: 200px; bottom: 170px; }
+/* 184px renders successGogo's visible height ~300px — same as the gogo-char
+   poses, so Gogo doesn't shrink between the round and its success screen */
+.feedback-gogo--success { width: 184px; bottom: 170px; }
 .feedback-gogo--wrong   { width: 320px; bottom: 205px; }
 .feedback-gogo--clue    { width: 320px; bottom: 200px; }
 
@@ -526,6 +549,11 @@ html, body {
    cards float their legs higher; the per-slot translateY aligns ALL THREE leg
    baselines on the same floor line, lifted so every tabletop (even the small
    5-span one) rises above the wall/floor edge. */
+/* showcase: the room behind is faded (.tut-blur on the bg) and every table
+   gets a warm halo, so the row of tables is unmistakably the focus */
+.hall-carousel--flat .hall-card .table__img {
+  filter: drop-shadow(0 18px 18px rgba(60,30,10,0.28)) drop-shadow(0 0 26px rgba(255,213,110,0.75));
+}
 .hall-carousel--flat .hall-card.is-center { left: 34.5%; transform: translateX(-50%) translateY(-40px) scale(0.9); }
 .hall-carousel--flat .hall-card.is-left  { left: 57%; opacity: 1; filter: none; transform: translateX(-50%) translateY(-36px) scale(0.9); }
 .hall-carousel--flat .hall-card.is-right { left: 84.5%; opacity: 1; filter: none; transform: translateX(-50%) translateY(-29px) scale(0.9); }
@@ -790,19 +818,16 @@ html, body {
   filter: drop-shadow(0 3px 0 var(--yellow));
 }
 
-/* --- big welcome panel (genie) ------------------------------------------ */
-.welcome-panel {
-  position: absolute; left: 50%; top: 78px; transform: translateX(-50%);
-  z-index: 30;
-  display: inline-block; max-width: 420px; box-sizing: border-box;
-  padding: 13px 24px 14px;
-  background: #7B219F;
-  border: 4px solid #fff;
-  border-radius: 20px;
-  box-shadow: 0 7px 14px rgba(35, 0, 45, 0.3);
-  /* centred via translateX(-50%); use a pop that preserves it */
-  animation: panel-pop 0.42s cubic-bezier(.34,1.56,.64,1) both;
+/* --- welcome dialogue (genie) -------------------------------------------- *
+ * Uses the Figma DialogueBox (.say-bubble--left) with a size/position
+ * override: up-right of the genie so the swoosh tail points at his head.   */
+.say-bubble--welcome {
+  /* beside the centred genie's head, BOTTOM-anchored so the tail tip lands
+     right at his ear whatever the text length */
+  left: 745px; bottom: 540px; z-index: 30;
+  max-width: 440px;
 }
+.say-bubble--welcome .say-bubble__text { font-size: 24px; }
 
 /* word-by-word reveal: each word pops in on a small stagger (see UI.fillWords) */
 .word-in {
@@ -813,15 +838,6 @@ html, body {
 }
 @keyframes word-pop {
   to { opacity: 1; transform: none; }
-}
-@keyframes panel-pop {
-  from { opacity: 0; transform: translateX(-50%) scale(0.7); }
-  to   { opacity: 1; transform: translateX(-50%) scale(1); }
-}
-.welcome-panel__text {
-  margin: 0; color: #fff; font-weight: 800; font-size: 24px; text-align: center; line-height: 1.16;
-  text-shadow: 0 2px 4px rgba(30, 0, 40, 0.35);
-  overflow-wrap: break-word;
 }
 /* --- GOGO SPEAKS: posed character + bubble whose tail points at it -------- */
 .gogo-char {
@@ -843,10 +859,14 @@ html, body {
   70%  { transform: scale(1.1) rotate(2deg); opacity: 1; filter: none; }
   100% { transform: scale(1) rotate(0deg); opacity: 1; filter: none; }
 }
-.gogo-char--talk, .gogo-char--think, .gogo-char--show { width: 380px; }
-/* wrongGogo's character fills its frame more, so it needs a narrower box to
-   read as the SAME size as the other poses */
-.gogo-char--wrong { width: 315px; }
+/* Each pose's art has different transparent padding, so the box widths are
+   calibrated (from the art's alpha bounds) to render the SAME visible
+   character height (~300px) in every pose, on every screen. The margins keep
+   the visible Gogo centred on the same spot when a pose swaps in place. */
+.gogo-char--talk { width: 380px; }
+.gogo-char--think { width: 344px; margin-left: 33px; }
+.gogo-char--show { width: 396px; margin-left: 7px; }
+.gogo-char--wrong { width: 309px; }
 .gogo-char--horizontal { width: 390px; animation: none; }   /* lounging narrator */
 
 /* Compact "thought box" that HUGS its text (no big empty panel): solid purple,
@@ -873,14 +893,21 @@ html, body {
    bubble's white border so box + tail read as ONE shape */
 .say-bubble--left .say-bubble__tail {
   /* overlap only the bubble's BORDER band (not its fill) so the tail's white
-     stroke never shows inside the text area; the patch bridges the border */
-  left: 10px; bottom: -29px; width: 62px; height: 33px;
+     stroke never shows inside the text area; the patch bridges the border.
+     The tail scales WITH the bubble (21% of its width, as authored at 300px)
+     so short bubbles ("No!") get a proportionally small tail, capped at the
+     authored 62px for full-width bubbles. */
+  left: 10px; top: calc(100% - 4px);
+  width: clamp(30px, 21%, 62px);
+  aspect-ratio: 62 / 33;
 }
 .say-bubble--left .say-bubble__tail svg { display: block; width: 100%; height: 100%; }
 /* Gogo below-RIGHT of the bubble -> the SAME authored swoosh tail, mirrored */
 .say-bubble--right { transform-origin: calc(100% - 30px) 100%; }
 .say-bubble--right .say-bubble__tail {
-  right: 10px; bottom: -29px; width: 62px; height: 33px;
+  right: 10px; top: calc(100% - 4px);
+  width: clamp(30px, 21%, 62px);
+  aspect-ratio: 62 / 33;
   transform: scaleX(-1);
 }
 .say-bubble--right .say-bubble__tail svg { display: block; width: 100%; height: 100%; }
@@ -898,15 +925,6 @@ html, body {
   100% { transform: scale(1); }
 }
 
-.welcome-panel__tail {
-  position: absolute; left: 50%; bottom: -13px; margin-left: -10px;
-  width: 19px; height: 19px;
-  background: #7B219F;
-  border-right: 4px solid #fff; border-bottom: 4px solid #fff;
-  border-bottom-right-radius: 5px;
-  transform: rotate(45deg);
-}
-
 /* --- compact feedback bubble (success / try-again / clue screens) -------- *
  * Smaller than the welcome panel and anchored to the genie's side, with its
  * tail pointing DOWN at the genie so it reads as the genie speaking.        */
@@ -920,8 +938,10 @@ html, body {
   box-shadow: 0 7px 14px rgba(35, 0, 45, 0.3);
   animation: gb-pop 0.42s cubic-bezier(.34,1.56,.64,1) both;
 }
-.fb-bubble--left  { left: 110px; }
-.fb-bubble--right { right: 40px; }
+/* sit each bubble just above its genie's head (tail tip on the turban) — the
+   left genies (success/clue) stand lower than the right one (wrong) */
+.fb-bubble--left  { left: 110px; top: 150px; }
+.fb-bubble--right { right: 90px; top: 100px; }
 .fb-bubble__text {
   margin: 0; color: #fff; font-weight: 800; font-size: 21px; text-align: center; line-height: 1.18;
   text-shadow: 0 2px 4px rgba(30, 0, 40, 0.35);
@@ -1231,15 +1251,6 @@ html, body {
   background: rgba(255, 213, 74, 0.16);
   box-shadow: inset 0 0 0 3px rgba(255, 213, 74, 0.9), 0 0 8px rgba(255, 213, 74, 0.4);
 }
-/* glowing podium the hand rests on */
-.drag-podium {
-  position: absolute; width: 150px; height: 44px; transform: translateX(-50%);
-  border-radius: 50%; z-index: 21; pointer-events: none;
-  background: radial-gradient(ellipse at center, rgba(190,27,255,0.6), rgba(120,16,150,0.22) 60%, transparent 74%);
-  box-shadow: 0 0 26px rgba(190,27,255,0.45);
-  animation: podium-pulse 3s ease-in-out infinite;
-}
-@keyframes podium-pulse { 0%,100% { opacity: 0.82; } 50% { opacity: 1; } }
 /* the draggable hand */
 .drag-hand {
   position: absolute; cursor: grab; z-index: 26; touch-action: none;

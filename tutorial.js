@@ -39,10 +39,11 @@ HS.Tutorial = (function () {
     else Object.assign(gogo.style, { left: '300px', top: '-6px' });   // standing gogo.webp
   }
   function bubblePos(pose) {
-    // hugging the head: the tail tip lands right beside Gogo's turban/ear
-    if (pose === 'horizontal') return { left: '648px', top: '8px' };
-    if (pose === 'show') return { left: '182px', top: '84px' };
-    return { left: '560px', top: '10px' };
+    // hugging the head: BOTTOM-anchored so the tail tip lands right beside
+    // Gogo's ear whatever the line length (the bubble grows upward)
+    if (pose === 'horizontal') return { left: '648px', bottom: '650px' };
+    if (pose === 'show') return { left: '195px', bottom: '500px' };
+    return { left: '560px', bottom: '640px' };
   }
   function say(h, s, gogo, text, pose) {
     UI.setGogoPose(gogo, pose);
@@ -60,6 +61,10 @@ HS.Tutorial = (function () {
     h.transitionTo(function () {
       var s = h.scene();
 
+      // fade the room behind so the row of tables is the clear focus
+      var bgEl = document.getElementById('bg');
+      bgEl.classList.add('tut-blur');
+
       // ---- the three tables in the selection carousel -------------------
       // starts UNLIT + FLAT: all three tables equally visible & sharp, no
       // spotlight, no blur/dim. The reveal then plays out one step at a time —
@@ -72,9 +77,14 @@ HS.Tutorial = (function () {
       var center = 0;
       for (var i = 0; i < tables.length; i++) { if (tables[i].spans === config.tutorialSpans) { center = i; break; } }
 
+      var bySize = tables.map(function (t) { return t.spans; }).sort(function (a, b) { return a - b; });
       var cards = tables.map(function (t, idx) {
         var card = el('div.hall-card', { dataset: { idx: String(idx) } });
         var table = UI.Table({ w: cardWidth(t.spans), src: TABLE_SRC, ratio: TABLE_RATIO });
+        // smaller tables get longer legs so every top clears the wall bar
+        // while the heights still read ascending with the span count
+        if (t.spans === bySize[0]) table.classList.add('table--tall');
+        else if (t.spans === bySize[1]) table.classList.add('table--tall-mid');
         card._table = table;
         card.appendChild(table);
         carousel.appendChild(card);
@@ -112,6 +122,7 @@ HS.Tutorial = (function () {
       });
       run = run.then(function () {
         A.playWhoosh();
+        bgEl.classList.remove('tut-blur');   // the spotlight sequence takes over
         carousel.classList.add('hall-carousel--slowmo');      // extra-slow glide
         carousel.classList.remove('hall-carousel--flat');     // sides recede & blur, centre forward
         return FX.wait(2100);   // let the slow move fully settle
@@ -137,7 +148,7 @@ HS.Tutorial = (function () {
         UI.setGogoPose(gogo, 'horizontal');   // lounging narrator, centred like the intro
         placeGogo(gogo, 'horizontal');        // (repositioned while invisible)
         UI.gogoAppear(gogo);                  // magic poof back in for the prompt
-        var b = UI.SayBubble('Tap here to select this table.', 'left');
+        var b = UI.SayBubble('Tap to select this table.', 'left');
         Object.assign(b.style, bubblePos('horizontal'));
         s.appendChild(b);
         A.playDialogue();

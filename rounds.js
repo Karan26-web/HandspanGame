@@ -1,14 +1,11 @@
 /* ============================================================================
- * rounds.js  —  "Hall of Tables": pick-a-table-to-measure loop
+ * rounds.js  —  "Hall of Tables": fixed-sequence measure loop
  * ----------------------------------------------------------------------------
- * After the tutorial the player is taken to a scrolling table-selection
- * carousel (the centred table is the big, selectable one). Gogo introduces it:
- *     "Let us now find the table that is 6 handspans long."
- *     "Pick a table you want to measure first."
- * The player scrolls (◀ ▶), taps the centred table, and measures it
- * (guess -> fly-in verify -> "The table is N handspans long."). A measured
- * table is then DISABLED so it can't be chosen again. When the player measures
- * the 6-handspan table, Gogo collects it in his sack and the game ends.
+ * After the tutorial the player returns to the hall: the JUST-measured table
+ * is shown centred with its "N handspans" chip, then glides aside so the next
+ * table comes into focus, and a hand nudge invites the tap (no arrows, no
+ * free selection — the order is fixed). Each tap runs the drag-to-measure
+ * round. Once every table is measured, Gogo bags the 6-handspan target.
  *
  * Shared phases (guessPhase / measureFly / wellDone / buildMeasureScene) are
  * provided by game.js via the hooks object `h`.
@@ -48,13 +45,43 @@ HS.Rounds = (function () {
     return b;
   }
 
-  /* ---- a Gogo instruction panel (avatar + purple bar), wait for a tap --- */
+  /* ---- a Gogo instruction panel (avatar + purple bar), wait for a tap ----
+   *      (cloth + candle flows only — the table flow uses gogoSay below) --- */
   function sayGogo(h, s, text) {
     var b = UI.TutorialBubble({ who: 'gogo', text: text });
     Object.assign(b.style, { left: '50%', top: '18px', transform: 'translateX(-50%)' });
     s.appendChild(b);
     A.playDialogue();
     return h.tapToContinue().then(function () { b.remove(); });
+  }
+
+  /* ---- Gogo IN PERSON delivers instructions (table flow) -----------------
+   * No instruction panel: the SAME fixed-size Gogo, on the SAME spot as the
+   * measuring screens, poofs in, speaks each line beside his head, then poofs
+   * away. Auto-paced (by line length) so whatever cue follows — e.g. the hand
+   * nudge — can appear the moment he vanishes. */
+  var GOGO_SPOT = { left: '130px', top: '40px' };     // one spot on every screen
+  // BOTTOM-anchored beside his head: the bubble grows UPWARD with its text, so
+  // the tail tip stays on his head whether the line is one word or two rows
+  var GOGO_BUBBLE = { left: '430px', bottom: '600px' };
+  function lineMs(text) { return Math.max(2400, 900 + String(text).split(/\s+/).length * 240); }
+  function gogoSay(s, lines) {
+    var g = UI.GogoCharacter('talk');
+    Object.assign(g.style, { left: GOGO_SPOT.left, top: GOGO_SPOT.top, visibility: 'hidden' });
+    s.appendChild(g);
+    var seq = FX.wait(350).then(function () { UI.gogoAppear(g); return FX.wait(500); });
+    lines.forEach(function (text) {
+      seq = seq.then(function () {
+        return new Promise(function (res) {
+          var b = UI.SayBubble(text, 'left');
+          Object.assign(b.style, GOGO_BUBBLE);
+          s.appendChild(b);
+          A.playDialogue();
+          setTimeout(function () { b.remove(); res(); }, lineMs(text));
+        });
+      });
+    });
+    return seq.then(function () { return UI.gogoVanish(g); }).then(function () { g.remove(); });
   }
 
   /* ---- a curved dashed "drag here" arrow (SVG) from (x1,y1) to (x2,y2) --- */
@@ -121,7 +148,6 @@ HS.Rounds = (function () {
       target: config.finalTarget,   // 6
       measured: tutIdx >= 0 ? [tutIdx] : [],   // tutorial table pre-measured
       hallMeasured: 0,              // tables measured IN the hall (for the faded guide)
-      introShown: false,
       center: 0
     };
     // festive entrance into the Hall of Tables
@@ -129,31 +155,35 @@ HS.Rounds = (function () {
   }
 
   /* ====================================================================== *
-   * THE HALL — scrolling table-selection carousel
+   * THE HALL — fixed-sequence table showcase (flow 1: no free selection)
+   * On entry the JUST-measured table holds the spotlight with its
+   * "N handspans" chip, then glides aside so the next table comes into
+   * focus, and a hand nudge invites the tap. No arrows, no panels, no Gogo.
    * ====================================================================== */
   function hall(config, h) {
     h.setBackground('play');
 
-    // centre on the first un-measured table when we come back
-    for (var k = 0; k < state.tables.length; k++) {
-      if (state.measured.indexOf((state.center + k) % state.tables.length) < 0) {
-        state.center = (state.center + k) % state.tables.length; break;
-      }
-    }
+    // start centred on the table we just measured (the tutorial one at first)
+    state.center = state.measured.length ? state.measured[state.measured.length - 1] : 0;
 
     h.transitionTo(function () {
       var s = h.scene();
 
-      var carousel = el('div.hall-carousel');
+      var carousel = el('div.hall-carousel hall-carousel--fixed');
       carousel.appendChild(el('div.select-glow'));
 
       // same brown artwork for every table — width grows with its span count so
       // a longer table genuinely looks longer in the carousel
+      var bySize = state.tables.map(function (t) { return t.spans; }).sort(function (a, b) { return a - b; });
       var cards = state.tables.map(function (t, i) {
         var card = el('div.hall-card', { dataset: { idx: String(i) } });
         var a = art(i);
         var cardW = (50 * t.spans) / (a.e1 - a.e0);   // constant hand size -> proportional width
         var table = UI.Table({ w: cardW, src: a.src, ratio: a.ratio });
+        // smaller tables get longer legs so every top clears the wall bar and
+        // the heights read ascending (matches the tutorial showcase)
+        if (t.spans === bySize[0]) table.classList.add('table--tall');
+        else if (t.spans === bySize[1]) table.classList.add('table--tall-mid');
         card._table = table;
         card.appendChild(table);
         if (state.measured.indexOf(i) >= 0) {
@@ -179,16 +209,9 @@ HS.Rounds = (function () {
       }
       s.appendChild(carousel);
 
-      // scroll arrows
-      var leftArrow = el('button.hall-arrow hall-arrow--left', { type: 'button' }, '‹');
-      var rightArrow = el('button.hall-arrow hall-arrow--right', { type: 'button' }, '›');
-      s.appendChild(leftArrow);
-      s.appendChild(rightArrow);
-
       var nudge = UI.HandNudge();
       nudge.classList.add('hand-nudge--tap');
-      // hidden until the intro panels finish — it appears only once it is time
-      // to actually pick a table (after "Pick a table you want to measure first.")
+      // hidden until the entrance recap finishes and the next table is in focus
       Object.assign(nudge.style, { left: '52%', top: '56%', display: 'none' });
       s.appendChild(nudge);
 
@@ -206,24 +229,15 @@ HS.Rounds = (function () {
       }
       layout();
 
-      function rotate(dir) {
-        A.playHover();   // same sound as tapping a side table to centre it
-        nudge.style.display = 'none';
-        state.center = (state.center + dir + n) % n;
-        layout();
-      }
-      leftArrow.addEventListener('click', function () { rotate(-1); });
-      rightArrow.addEventListener('click', function () { rotate(1); });
-
+      // the sequence is FIXED: only the centred, next-in-line table is tappable
+      var picked = false;   // guards against double-taps re-running the round
       cards.forEach(function (card, i) {
-        card.addEventListener('mouseenter', function () { A.playHover(); });
+        card.addEventListener('mouseenter', function () {
+          if (card.classList.contains('is-center') && !isDone(i)) A.playHover();
+        });
         card.addEventListener('click', function () {
-          // tapping a side table scrolls it to the centre (with the hover sfx)
-          if (!card.classList.contains('is-center')) {
-            state.center = i; layout(); A.playHover(); nudge.style.display = 'none'; return;
-          }
-          if (isDone(i)) { FX.shake(card); A.playWrong(); return; }   // disabled
-          // select this table to measure
+          if (picked || !card.classList.contains('is-center') || isDone(i)) return;
+          picked = true;
           A.playClick();
           nudge.remove();
           var c = FX.centerOf(card);
@@ -235,21 +249,30 @@ HS.Rounds = (function () {
         });
       });
 
-      // Gogo instructions
-      var run = Promise.resolve();
-      if (!state.introShown) {
-        state.introShown = true;
-        run = run.then(function () {
-          return sayGogo(h, s, 'Let us now find the table that is ' + state.target + ' handspans long.');
-        }).then(function () {
-          return sayGogo(h, s, 'Pick a table you want to measure first.');
-        });
-      } else {
-        run = run.then(function () { return sayGogo(h, s, 'Pick another table to measure.'); });
-      }
-      // the nudge now appears, cueing the player to pick the centred table
+      // ENTRANCE RECAP: the just-measured table holds the spotlight, bright,
+      // with its "N handspans" chip — then it glides aside, the next table
+      // comes into focus, and only then the hand nudge appears.
+      var prevCard = cards[state.center];
+      prevCard.classList.add('hall-card--recap');
+      prevCard._table.classList.add('table--glow');
+      // the festive overlay still covers the scene for ~1.3s after it is
+      // built — hold the recap long enough that it plays out in full view
+      var run = FX.wait(3000);
+      run = run.then(function () {
+        prevCard.classList.remove('hall-card--recap');
+        A.playWhoosh();
+        for (var k = 1; k <= n; k++) {                 // next unmeasured table
+          var idx = (state.center + k) % n;
+          if (!isDone(idx)) { state.center = idx; break; }
+        }
+        layout();                                      // the recap card glides aside
+        return FX.wait(900);
+      });
       return run.then(function () {
-        if (document.body.contains(nudge)) { UI.idleNudge(nudge, { onShow: function () { A.playPop(); } }); }
+        if (!document.body.contains(nudge)) return;
+        UI.idleNudge(nudge, { onShow: function () { A.playPop(); } });
+        nudge.style.display = '';
+        A.playPop();
       });
     });
   }
@@ -394,20 +417,37 @@ HS.Rounds = (function () {
       });
     }
 
-    // full-body genie + a purple message panel (feedback screens)
+    // full-body genie + a purple message panel (feedback screens).
+    // `text` may be an array of lines — they play one after another in the
+    // same bubble spot (e.g. "Well Done!" then the measured length).
     function feedback(s, who, text) {
       var src = who === 'success' ? 'assets/successGogo.webp'
               : who === 'wrong' ? 'assets/wrongGogo.webp'
               : 'assets/ShowingGogo.webp';
-      // genie stands left for success/clue, right for wrong; the bubble sits on
-      // the same side with its tail pointing down at the genie
-      var onRight = who === 'wrong';
+      // genie stands RIGHT for success/wrong, left for the clue; the bubble
+      // sits on the same side with its tail pointing down at the genie
+      var onRight = who === 'wrong' || who === 'success';
       var gogo = el('img.feedback-gogo feedback-gogo--' + who + ' ' + (onRight ? 'feedback-gogo--right' : 'feedback-gogo--left'), { src: src, alt: '', draggable: 'false' });
       s.appendChild(gogo);
       if (who === 'success') A.playClap();   // cheer whenever successGogo appears
-      var panel = UI.FeedbackBubble(text, onRight ? 'right' : 'left');
-      s.appendChild(panel);
-      A.playDialogue();
+      var lines = Array.isArray(text) ? text : [text];
+      var side = onRight ? 'right' : 'left';
+      var li = 0, panel = null;
+      (function show() {
+        if (panel) panel.remove();
+        var line = lines[li];
+        panel = UI.FeedbackBubble(line, side);
+        // successGogo stands lower than wrongGogo — drop the bubble to his head
+        if (who === 'success') panel.style.top = '150px';
+        s.appendChild(panel);
+        A.playDialogue();
+        li++;
+        if (li < lines.length) {
+          setTimeout(function () {
+            if (document.body.contains(panel)) show();   // scene may have moved on
+          }, lineMs(line));
+        }
+      })();
     }
 
     /* ---- DRAG-TO-MEASURE: the player drags hands into the span slots ------ *
@@ -423,9 +463,9 @@ HS.Rounds = (function () {
         // tutorial mode reveals the stage piece by piece (table -> guide lines
         // -> Gogo + text -> handspan); other rounds show everything at once
         var layer = buildStage(s, null, !!opts.tutorial);
-        // in tutorial mode the scripted demo owns the top bubbles; the standing
-        // instruction is created only once the player takes over (see beginPlay)
-        var bubble = opts.tutorial ? null : instruct(s, 'Guess how many handspans long the table is.');
+        // no standing instruction panel — Gogo himself delivers the line in
+        // both modes (see runTutorial / beginRound), then steps aside
+        var bubble = null;
 
         var stageEl = document.getElementById('stage');
         function toStage(cx, cy) {
@@ -447,11 +487,7 @@ HS.Rounds = (function () {
         var teacher = null;   // the Gogo/ThinkGogo character shown during the tutorial demo
         var demoSource = null;   // the persistent hand on the podium during the demo (clones do the moving)
 
-        var REST = { left: 92, top: 548 };   // hand's resting spot on the podium
-        var podium = el('div.drag-podium');
-        Object.assign(podium.style, { left: (REST.left + HW / 2) + 'px', top: (REST.top + HW + 4) + 'px' });
-        if (opts.tutorial) podium.style.display = 'none';   // revealed later, after Gogo speaks
-        s.appendChild(podium);
+        var REST = { left: 92, top: 548 };   // hand's resting spot (bottom-left)
 
         // sequential placement: the ONLY valid target is the next empty slot.
         // zones fill strictly left-to-right, so that's always index `filled`.
@@ -462,18 +498,61 @@ HS.Rounds = (function () {
           if (curHand) curHand.classList.remove('drag-hand--hint');
           if (idleNudgeEl) { idleNudgeEl.remove(); idleNudgeEl = null; }
         }
+        // The nudge cursor TRACES the drag path on a loop — podium up to the
+        // next empty slot — showing the child the hand must be moved that way.
+        function showDragNudge() {
+          if (idleNudgeEl || !alive) return;
+          var n = UI.HandNudge();
+          // the cropped nudge's fingertip is top-centre; start it over the hand
+          Object.assign(n.style, { position: 'absolute', left: (REST.left + HW * 0.42) + 'px', top: (REST.top + HW * 0.06) + 'px', width: '44px', zIndex: '30' });
+          s.appendChild(n);
+          idleNudgeEl = n;
+          A.playPop();
+          (function pass() {
+            if (idleNudgeEl !== n || !alive) return;
+            var zi = nextZone();
+            if (zi < 0) { stopIdle(); return; }
+            n.style.transition = 'none'; n.style.opacity = '1';
+            n.style.left = (REST.left + HW * 0.42) + 'px'; n.style.top = (REST.top + HW * 0.06) + 'px';
+            moveArc(n, zones[zi].left + HW * 0.42, HAND_TOP + HW * 0.1, 1400).then(function () {
+              if (idleNudgeEl !== n) return;
+              n.style.transition = 'opacity 0.25s ease'; n.style.opacity = '0';
+              setTimeout(pass, 420);
+            });
+          })();
+        }
         function armIdle() {
           stopIdle();
           if (!alive || filled >= spans) return;
           idleTimer = setTimeout(function () {
             if (!alive || !curHand) return;
             curHand.classList.add('drag-hand--hint');
-            idleNudgeEl = UI.HandNudge();
-            // the cropped nudge's fingertip is top-centre; sit it over the hand
-            Object.assign(idleNudgeEl.style, { position: 'absolute', left: (REST.left + HW * 0.42) + 'px', top: (REST.top + HW * 0.06) + 'px', width: '58px', zIndex: '30' });
-            s.appendChild(idleNudgeEl);
-            A.playPop();
-          }, 10000);
+            showDragNudge();
+          }, 5000);
+        }
+        // While the child HOLDS the handspan, a faded ghost hand loops along
+        // the same path, guiding where to place it.
+        var guideGhost = null;
+        function stopGuide() {
+          var g = guideGhost; guideGhost = null;
+          if (g) g.remove();
+        }
+        function startGuide() {
+          if (guideGhost || !alive || nextZone() < 0) return;
+          var g = demoHand(true);
+          guideGhost = g;
+          (function pass() {
+            if (guideGhost !== g || !alive) return;
+            var zi = nextZone();
+            if (zi < 0) { stopGuide(); return; }
+            g.style.transition = 'none'; g.style.opacity = '0.4';
+            g.style.left = REST.left + 'px'; g.style.top = REST.top + 'px';
+            moveArc(g, zones[zi].left, HAND_TOP, 1200).then(function () {
+              if (guideGhost !== g) return;
+              g.style.transition = 'opacity 0.25s ease'; g.style.opacity = '0';
+              setTimeout(pass, 360);
+            });
+          })();
         }
 
         // The hand on the podium is a PERSISTENT source — it never moves. Each
@@ -521,6 +600,7 @@ HS.Rounds = (function () {
             document.addEventListener('pointermove', move);
             document.addEventListener('pointerup', up);
             document.addEventListener('pointercancel', up);
+            startGuide();   // ghost hand shows where this handspan goes
             A.playPop(); move(e); e.preventDefault();
           }
           function move(e) {
@@ -536,6 +616,7 @@ HS.Rounds = (function () {
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', up);
             document.removeEventListener('pointercancel', up);
+            stopGuide();
             clearTargets();
             var c = clone; clone = null;
             if (!c) return;
@@ -570,14 +651,14 @@ HS.Rounds = (function () {
         }
 
         function finishMeasure() {
-          alive = false; stopIdle();
+          alive = false; stopIdle(); stopGuide();
           // the standing instruction + teaching Gogo have served their purpose —
           // clear them so they don't collide with Gogo's success panel
           if (bubble) { bubble.remove(); bubble = null; }
           if (teacher) { var tg2 = teacher; teacher = null; UI.gogoVanish(tg2).then(function () { tg2.remove(); }); }
           if (curHand) { curHand.remove(); curHand = null; }   // remove the podium source
           FX.celebrate();
-          feedback(s, 'success', 'The table is ' + spans + ' handspans long.');
+          feedback(s, 'success', ['Well Done!', 'The table is ' + spans + ' handspans long!']);
           h.tapToContinue().then(function () { opts.onDone(); });
         }
 
@@ -644,9 +725,22 @@ HS.Rounds = (function () {
         }
         // Each pose's art has different transparent padding, so the bubble is
         // anchored to that pose's VISIBLE right edge — no floating gap on
-        // narrow poses (e.g. ThinkGogo).
-        var DEMO_BUBBLE_X = { talk: 430, think: 410, show: 420, wrong: 390 };
-        function demoBubbleAt(pose) { return { left: (DEMO_BUBBLE_X[pose] || 498) + 'px', top: '34px' }; }
+        // narrow poses (e.g. ThinkGogo). BOTTOM-anchored (like GOGO_BUBBLE) so
+        // short lines ("Yes!") keep their tail tip on his head too.
+        var DEMO_BUBBLE = {
+          talk: { left: '430px', bottom: '600px' },
+          think: { left: '410px', bottom: '600px' },
+          // the show pose raises a hand to the RIGHT of his head, so the only
+          // clear head-adjacent spot is ABOVE the turban — tail dropping onto it
+          show: { left: '250px', bottom: '615px' },
+          wrong: { left: '390px', bottom: '600px' }
+        };
+        function demoBubbleAt(pose) { return DEMO_BUBBLE[pose] || DEMO_BUBBLE.talk; }
+        // beside the head of the small horizontal Gogo down at the podium
+        var PODIUM_BUBBLE = { left: '280px', bottom: '330px' };
+        // to the LEFT of the right-side "No!" Gogo — bottom-anchored so a
+        // two-line rule never collides with his turban, tail tip on his head
+        var RIGHT_BUBBLE = { right: '240px', bottom: '475px' };
         // Gogo speaks; the bubble sits beside him with its tail pointing at him.
         // `pose` picks the asset by the kind of line. Auto-advances after `ms`,
         // or waits for a tap if ms is 0.
@@ -657,7 +751,9 @@ HS.Rounds = (function () {
             Object.assign(b.style, posOverride || demoBubbleAt(pose || 'talk'));
             s.appendChild(b);
             A.playDialogue();
-            if (ms) setTimeout(function () { b.remove(); res(); }, ms);
+            // every timed line stays up at least long enough to be READ by a
+            // child (lineMs scales with the word count)
+            if (ms) setTimeout(function () { b.remove(); res(); }, Math.max(ms, lineMs(text)));
             else h.tapToContinue().then(function () { b.remove(); res(); });
           });
         }
@@ -674,18 +770,19 @@ HS.Rounds = (function () {
         // tail curving down onto his face
         function pointBubbleAt(cx) { return { left: (cx + 92) + 'px', top: '246px' }; }
         // after pointing, Gogo vanishes and REAPPEARS ON THE RIGHT to say "No!"
+        // (far enough right that his bubble never collapses onto him)
         function noFromRight() {
           return UI.gogoTeleport(teacher, function () {
             UI.setGogoPose(teacher, 'wrong');
             // sized to visually MATCH the small pointing Gogo (not the full 315px)
-            Object.assign(teacher.style, { width: '215px', transition: '', left: '910px', top: '240px' });
-          }).then(function () { return verdict('No!', false, { right: '300px', top: '238px' }, 'right'); });
+            Object.assign(teacher.style, { width: '215px', transition: '', left: '980px', top: '240px' });
+          }).then(function () { return verdict('No!', false, RIGHT_BUBBLE, 'right'); });
         }
         // teleport the teacher back to his corner
         function gogoHome(pose) {
           return UI.gogoTeleport(teacher, function () {
             UI.setGogoPose(teacher, pose || 'talk');
-            Object.assign(teacher.style, { width: '', transition: '', left: '130px', top: '40px' });
+            Object.assign(teacher.style, { width: '', transition: '', left: GOGO_SPOT.left, top: GOGO_SPOT.top });
           });
         }
         // "No!" / "Yes!" is Gogo answering his own question — same purple bubble
@@ -698,7 +795,7 @@ HS.Rounds = (function () {
             Object.assign(b.style, posOverride || demoBubbleAt(good ? 'talk' : 'wrong'));
             s.appendChild(b);
             if (good) A.playSuccess(); else A.playWrong();
-            setTimeout(function () { b.remove(); res(); }, 1500);
+            setTimeout(function () { b.remove(); res(); }, 2000);
           });
         }
 
@@ -707,7 +804,7 @@ HS.Rounds = (function () {
           //   1. the table alone   2. the guide lines (SFX)
           //   3. Gogo + his line   4. the handspan on its podium
           teacher = UI.GogoCharacter('talk');
-          Object.assign(teacher.style, { left: '130px', top: '40px', visibility: 'hidden' });
+          Object.assign(teacher.style, { left: GOGO_SPOT.left, top: GOGO_SPOT.top, visibility: 'hidden' });
           s.appendChild(teacher);
 
           var seq = FX.wait(900);                                   // 1. table alone
@@ -721,7 +818,6 @@ HS.Rounds = (function () {
           });
           seq = seq.then(function () { return demoLine('We need to measure the table using hand spans.', 0, 'talk'); });
           seq = seq.then(function () {                              // 4. the handspan appears
-            podium.style.display = '';
             demoSource = demoHand(false);
             demoSource.style.transform = 'scale(0.3)'; demoSource.style.opacity = '0';
             demoSource.style.transition = 'transform 0.3s cubic-bezier(.2,1.5,.4,1), opacity 0.25s ease';
@@ -748,13 +844,14 @@ HS.Rounds = (function () {
               // ...and only then his line pops up RIGHT AT HIS HEAD down there
               // (tail tip on his turban). It stays just long enough to read...
               c = c.then(function () {
-                b = UI.SayBubble("Let's drag a handspan from here to here.", 'left');
-                Object.assign(b.style, { left: '170px', top: '272px' });
+                var line = "Let's drag a handspan from here to here.";
+                b = UI.SayBubble(line, 'left');
+                Object.assign(b.style, PODIUM_BUBBLE);
                 s.appendChild(b); A.playDialogue();
                 // the arrowhead lands INSIDE the first square, marking the drop spot
                 arr = makeArrow(REST.left + HW, REST.top + 6, L0 + HW * 0.35, HAND_TOP + HW / 2);
                 s.appendChild(arr);
-                return FX.wait(2000);
+                return FX.wait(lineMs(line));   // read time BEFORE the ghost hand starts
               });
               // ...and goes AWAY the moment the ghost animation begins
               c = c.then(function () {
@@ -789,7 +886,7 @@ HS.Rounds = (function () {
               c = c.then(function () {
                 return UI.gogoTeleport(teacher, function () {
                   UI.setGogoPose(teacher, 'talk');
-                  Object.assign(teacher.style, { width: '', transition: '', left: '130px', top: '40px' });
+                  Object.assign(teacher.style, { width: '', transition: '', left: GOGO_SPOT.left, top: GOGO_SPOT.top });
                 });
               });
               c.then(function () {
@@ -829,11 +926,27 @@ HS.Rounds = (function () {
           // Same pattern as hand 1: the pointing (horizontal) Gogo hovers over
           // the hand in question, and the "No!" + rule come from the right side.
           var OVERLAP_CX = OVERLAP + HW / 2, GAP_CX = GAP + HW / 2, L1_CX = L1 + HW / 2;
-          // rule lines sit BESIDE the right-side Gogo's head (to his LEFT, with
-          // the mirrored tail on him) — right-anchored so any text width fits
-          var RIGHT_BUBBLE = { right: '300px', top: '226px' };
           var hand2;
-          seq = seq.then(function () { return demoLine("Let's drag the next handspan.", 0, 'show'); });
+          // As in the first demo: Gogo flies down beside the podium pointing at
+          // the handspan, his line pops up at his head, and a faded ghost hand
+          // replays the drag gesture (Gogo gliding along) to the next slot.
+          seq = seq.then(function () {
+            return UI.gogoTeleport(teacher, function () {
+              UI.setGogoPose(teacher, 'horizontal');
+              Object.assign(teacher.style, { width: '250px', left: '16px', top: '330px' });
+            });
+          });
+          seq = seq.then(function () { return demoLine("Let's drag the next handspan.", 0, null, PODIUM_BUBBLE); });
+          seq = seq.then(function () {
+            var ghost = demoHand(true);
+            A.playWhoosh();
+            teacher.style.transition = 'left 1300ms cubic-bezier(.4,.05,.4,1), top 1300ms cubic-bezier(.4,.05,.4,1)';
+            requestAnimationFrame(function () { teacher.style.left = (L1 - 108) + 'px'; teacher.style.top = '226px'; });
+            return moveArc(ghost, L1, HAND_TOP, 1300).then(function () {
+              ghost.style.transition = 'opacity .3s ease'; ghost.style.opacity = '0';
+              return FX.wait(320).then(function () { ghost.remove(); });
+            });
+          });
           seq = seq.then(function () { hand2 = demoHand(false); A.playWhoosh(); return moveArc(hand2, OVERLAP, HAND_TOP, 1300); });
           seq = seq.then(function () { return pointGogoAt(OVERLAP_CX); });
           seq = seq.then(function () { return demoLine('Can we keep it here?', 2300, null, pointBubbleAt(OVERLAP_CX)); });
@@ -856,22 +969,49 @@ HS.Rounds = (function () {
           return seq;
         }
 
-        // hand control to the player for the remaining spans. Gogo stays in the
-        // corner (pointing) as the companion, and the standing instruction
-        // bubble keeps its tail on him.
+        // hand control to the player for the remaining spans. Gogo delivers his
+        // hand-over in two short lines, poofs away, and only THEN the nudge
+        // cursor appears, tracing the drag path.
         function beginPlay() {
           firstPlaced = true;   // the demo already taught the drag — skip the first-time arrow
           if (demoSource) { demoSource.remove(); demoSource = null; }   // hand off to the interactive source
           if (teacher) UI.setGogoPose(teacher, 'show');
-          bubble = UI.SayBubble('Now you try! Drag the rest with no gaps.', 'left');
-          Object.assign(bubble.style, demoBubbleAt('show'));
-          s.appendChild(bubble);
-          A.playDialogue();
-          spawnHand();
+          var seq = demoLine('Now you try!', 2000, 'show');
+          seq = seq.then(function () { return demoLine('Drag the rest with no gaps.', 2600, 'show'); });
+          seq = seq.then(function () {
+            if (!teacher) return;
+            var tg = teacher; teacher = null;
+            return UI.gogoVanish(tg).then(function () { tg.remove(); });
+          });
+          seq = seq.then(function () {
+            spawnHand();
+            showDragNudge();   // demonstrate the drag path right away
+          });
+          return seq;
+        }
+
+        // non-tutorial rounds: Gogo (same size + spot as the tutorial teacher)
+        // poofs in, gives the task, poofs away — then the hand + nudge appear
+        function beginRound() {
+          teacher = UI.GogoCharacter('talk');
+          Object.assign(teacher.style, { left: GOGO_SPOT.left, top: GOGO_SPOT.top, visibility: 'hidden' });
+          s.appendChild(teacher);
+          var seq = FX.wait(350);
+          seq = seq.then(function () { UI.gogoAppear(teacher); return FX.wait(500); });
+          seq = seq.then(function () { return demoLine('Find out how long the table is.', 2600, 'talk'); });
+          seq = seq.then(function () {
+            var tg = teacher; teacher = null;
+            return UI.gogoVanish(tg).then(function () { tg.remove(); });
+          });
+          seq = seq.then(function () {
+            spawnHand();
+            showDragNudge();
+          });
+          return seq;
         }
 
         if (opts.tutorial) runTutorial().then(beginPlay);
-        else spawnHand();
+        else beginRound();
         return null;
       });
     }
@@ -908,7 +1048,7 @@ HS.Rounds = (function () {
       var run = Promise.resolve();
       run = run.then(function () {
         FX.celebrate(card);
-        return sayGogo(h, s, 'You found it! This table is ' + state.target + ' handspans long!');
+        return gogoSay(s, ['You found it! This table is ' + state.target + ' handspans long!']);
       });
       run = run.then(function () { return sackAnim(h, s, card); });
       // ... then on to the cloth round (2nd flow, measured by width in the Bgm2 room)
@@ -1090,11 +1230,14 @@ HS.Rounds = (function () {
       leftArrow.addEventListener('click', function () { rotate(-1); });
       rightArrow.addEventListener('click', function () { rotate(1); });
 
+      var picked = false;   // guards against double-taps re-running the round
       cards.forEach(function (card, i) {
         card.addEventListener('mouseenter', function () { A.playHover(); });
         card.addEventListener('click', function () {
+          if (picked) return;
           if (!card.classList.contains('is-center')) { candleState.center = i; layout(); A.playHover(); nudge.style.display = 'none'; return; }
           if (isDone(i)) { FX.shake(card); A.playWrong(); return; }
+          picked = true;
           A.playClick(); nudge.remove();
           var c = FX.centerOf(card);
           FX.sparkleBurst(c.x, c.y, { count: 18, spread: 130 });
@@ -1503,9 +1646,65 @@ HS.Rounds = (function () {
     });
   }
 
+  /* ====================================================================== *
+   * DEBUG JUMPS — used only by the dev widget (debug.js). Each entry drops
+   * straight onto one screen with a plausible state, skipping the journey.
+   * ====================================================================== */
+  function debugEnsureState(config) {
+    var tutIdx = -1;
+    for (var i = 0; i < config.finalTables.length; i++) {
+      if (config.finalTables[i].spans === config.tutorialSpans) { tutIdx = i; break; }
+    }
+    state = {
+      tables: config.finalTables,
+      target: config.finalTarget,
+      measured: tutIdx >= 0 ? [tutIdx] : [],
+      hallMeasured: 0,
+      center: 0
+    };
+  }
+  var debug = {
+    round: function (config, h, spans) {
+      debugEnsureState(config);
+      for (var i = 0; i < state.tables.length; i++) {
+        if (state.tables[i].spans === spans) { measureTable(config, h, i); return; }
+      }
+    },
+    hallSuccess: function (config, h) {
+      debugEnsureState(config);
+      state.measured = state.tables.map(function (t, i) { return i; });
+      hallSuccess(config, h);
+    },
+    cloth: function (config, h, spans) {
+      clothState = { list: CLOTHS, target: CLOTH_TARGET, measured: [], introShown: true, center: 0 };
+      for (var i = 0; i < CLOTHS.length; i++) {
+        if (CLOTHS[i].spans === spans) { measureCloth(config, h, i); return; }
+      }
+    },
+    clothSuccess: function (config, h) {
+      clothState = { list: CLOTHS, target: CLOTH_TARGET, measured: [0, 1, 2], introShown: true, center: 0 };
+      clothSuccess(config, h);
+    },
+    candles: startCandles,
+    candle: function (config, h, spans) {
+      candleState = { spansList: [5, 3, 7], target: 5, measured: [], introShown: true, center: 0 };
+      var idx = candleState.spansList.indexOf(spans);
+      measureCandle(config, h, idx < 0 ? 0 : idx);
+    },
+    candleSuccess: function (config, h) {
+      candleState = { spansList: [5, 3, 7], target: 5, measured: [0, 1, 2], introShown: true, center: 0 };
+      candleSuccess(config, h);
+    },
+    end: function (config, h) {
+      debugEnsureState(config);
+      endScreen(config, h);
+    }
+  };
+
   return {
     startTutorialMeasure: startTutorialMeasure,
     startHall: startHall,
-    startCloths: startCloths
+    startCloths: startCloths,
+    debug: debug
   };
 })();
