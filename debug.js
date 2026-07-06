@@ -38,7 +38,7 @@
       ['Round · table (6 sp)',   function () { R.debug.round(CONFIG, h, 6); }],
       ['Hall success · bag it',  function () { R.debug.hallSuccess(CONFIG, h); }],
       ['Cloth hall (flow 2)',    function () { R.startCloths(CONFIG, h); }],
-      ['Cloth round (9 sp)',     function () { R.debug.cloth(CONFIG, h, 9); }],
+      ['Cloth round (8 sp)',     function () { R.debug.cloth(CONFIG, h, 8); }],
       ['Cloth success',          function () { R.debug.clothSuccess(CONFIG, h); }],
       ['Candle hall (flow 3)',   function () { R.debug.candles(CONFIG, h); }],
       ['Candle round (5 sp)',    function () { R.debug.candle(CONFIG, h, 5); }],

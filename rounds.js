@@ -35,19 +35,23 @@ HS.Rounds = (function () {
   // persistent state for the hall loop (reset each time we enter it)
   var state = null;
 
-  /* ---- a PERSISTENT Gogo instruction panel (avatar + purple bar) that stays
-   *      on screen (e.g. the guess heading) — does NOT wait for a tap --------- */
-  function instruct(s, text) {
+  /* ---- ONE instruction panel for the guess flows (cloth + candle) --------
+   * Gogo IN PERSON is reserved for the table flow (flow 1). In every other
+   * flow the round plays out on its own, and JUST BEFORE play a single
+   * instruction panel (avatar + purple bar) comes in with the task text,
+   * is read, and goes away by itself. */
+  function instructOnce(s, text) {
     var b = UI.TutorialBubble({ who: 'gogo', text: text });
     Object.assign(b.style, { left: '50%', top: '18px', transform: 'translateX(-50%)' });
     s.appendChild(b);
     A.playDialogue();
-    return b;
+    return FX.wait(lineMs(text)).then(function () {
+      b.style.transition = 'opacity 0.3s ease'; b.style.opacity = '0';
+      return FX.wait(300).then(function () { b.remove(); });
+    });
   }
-
-  /* ---- a Gogo instruction panel (avatar + purple bar), wait for a tap ----
-   *      (cloth + candle flows only — the table flow uses gogoSay below) --- */
-  function sayGogo(h, s, text) {
+  /* same panel, but held on screen until a tap (success recaps) */
+  function panelSay(h, s, text) {
     var b = UI.TutorialBubble({ who: 'gogo', text: text });
     Object.assign(b.style, { left: '50%', top: '18px', transform: 'translateX(-50%)' });
     s.appendChild(b);
@@ -55,7 +59,7 @@ HS.Rounds = (function () {
     return h.tapToContinue().then(function () { b.remove(); });
   }
 
-  /* ---- Gogo IN PERSON delivers instructions (table flow) -----------------
+  /* ---- Gogo IN PERSON delivers instructions (table flow ONLY) ------------
    * No instruction panel: the SAME fixed-size Gogo, on the SAME spot as the
    * measuring screens, poofs in, speaks each line beside his head, then poofs
    * away. Auto-paced (by line length) so whatever cue follows — e.g. the hand
@@ -82,6 +86,50 @@ HS.Rounds = (function () {
       });
     });
     return seq.then(function () { return UI.gogoVanish(g); }).then(function () { g.remove(); });
+  }
+
+  /* ---- full-body genie + purple message panel (success / wrong / clue) ---
+   * ONE feedback style for every flow (matches flow 1). `text` may be an
+   * array of lines — they play one after another in the same bubble spot.
+   * The wrong + clue lines use the SAME dialogue box as flow 1's Gogo speech
+   * (the white-stroked Figma DialogueBox with its swoosh tail), BOTTOM
+   * anchored beside the genie's head so the tail tip stays on his head. */
+  var FEEDBACK_BUBBLE = {
+    wrong: { tail: 'right', style: { right: '250px', bottom: '570px' } },
+    clue:  { tail: 'left',  style: { left: '235px',  bottom: '558px' } }
+  };
+  function feedback(s, who, text) {
+    var src = who === 'success' ? 'assets/successGogo.webp'
+            : who === 'wrong' ? 'assets/wrongGogo.webp'
+            : 'assets/ShowingGogo.webp';
+    // genie stands RIGHT for success/wrong, left for the clue; the bubble
+    // sits on the same side with its tail pointing down at the genie
+    var onRight = who === 'wrong' || who === 'success';
+    var gogo = el('img.feedback-gogo feedback-gogo--' + who + ' ' + (onRight ? 'feedback-gogo--right' : 'feedback-gogo--left'), { src: src, alt: '', draggable: 'false' });
+    s.appendChild(gogo);
+    if (who === 'success') A.playClap();   // cheer whenever successGogo appears
+    var lines = Array.isArray(text) ? text : [text];
+    var li = 0, panel = null;
+    (function show() {
+      if (panel) panel.remove();
+      var line = lines[li];
+      var spot = FEEDBACK_BUBBLE[who];
+      if (spot) {                                  // wrong / clue -> flow-1 dialogue box
+        panel = UI.SayBubble(line, spot.tail);
+        Object.assign(panel.style, spot.style);
+      } else {                                     // success keeps the compact panel
+        panel = UI.FeedbackBubble(line, onRight ? 'right' : 'left');
+        panel.style.top = '150px';                 // successGogo stands lower — drop to his head
+      }
+      s.appendChild(panel);
+      A.playDialogue();
+      li++;
+      if (li < lines.length) {
+        setTimeout(function () {
+          if (document.body.contains(panel)) show();   // scene may have moved on
+        }, lineMs(line));
+      }
+    })();
   }
 
   /* ---- a curved dashed "drag here" arrow (SVG) from (x1,y1) to (x2,y2) --- */
@@ -182,9 +230,12 @@ HS.Rounds = (function () {
         var table = UI.Table({ w: cardW, src: a.src, ratio: a.ratio });
         // smaller tables get longer legs so every top clears the wall bar and
         // the heights read ascending (matches the tutorial showcase)
-        if (t.spans === bySize[0]) table.classList.add('table--tall');
-        else if (t.spans === bySize[1]) table.classList.add('table--tall-mid');
+        var stretch = 1;
+        if (t.spans === bySize[0]) { table.classList.add('table--tall'); stretch = 1.22; }
+        else if (t.spans === bySize[1]) { table.classList.add('table--tall-mid'); stretch = 1.15; }
         card._table = table;
+        card._w = cardW;
+        card._h = cardW * a.ratio * stretch;
         card.appendChild(table);
         if (state.measured.indexOf(i) >= 0) {
           card.classList.add('hall-card--done');
@@ -226,6 +277,18 @@ HS.Rounds = (function () {
           // glow only the centred, still-measurable table
           card._table.classList.toggle('table--glow', rel === 0 && !isDone(i));
         });
+        // The light cone is tuned for the small tables; the 8-span tabletop is
+        // wider than the beam at its height. Widen the cone (via --beam-scale)
+        // just enough that the beam clears the centred tabletop with a margin.
+        // Mirrors the .hall-carousel::after geometry: width 72% of the stage,
+        // top -6%, height 98%, cone edges 24% -> 86% of its width top-to-bottom.
+        var c = cards[state.center];
+        var tableW = c._w * 1.3;                          // is-center scale
+        var tableTopY = (720 - 236) - c._h * 1.3;         // cards stand 236px above the stage floor
+        var t = (tableTopY + 0.06 * 720) / (0.98 * 720);  // 0 = cone top, 1 = cone bottom
+        var beamAtTop = 0.72 * 1280 * (0.24 + 0.62 * t);  // base beam width at the tabletop
+        var scale = Math.max(1, (tableW + 48) / beamAtTop);
+        carousel.style.setProperty('--beam-scale', scale.toFixed(3));
       }
       layout();
 
@@ -417,39 +480,6 @@ HS.Rounds = (function () {
       });
     }
 
-    // full-body genie + a purple message panel (feedback screens).
-    // `text` may be an array of lines — they play one after another in the
-    // same bubble spot (e.g. "Well Done!" then the measured length).
-    function feedback(s, who, text) {
-      var src = who === 'success' ? 'assets/successGogo.webp'
-              : who === 'wrong' ? 'assets/wrongGogo.webp'
-              : 'assets/ShowingGogo.webp';
-      // genie stands RIGHT for success/wrong, left for the clue; the bubble
-      // sits on the same side with its tail pointing down at the genie
-      var onRight = who === 'wrong' || who === 'success';
-      var gogo = el('img.feedback-gogo feedback-gogo--' + who + ' ' + (onRight ? 'feedback-gogo--right' : 'feedback-gogo--left'), { src: src, alt: '', draggable: 'false' });
-      s.appendChild(gogo);
-      if (who === 'success') A.playClap();   // cheer whenever successGogo appears
-      var lines = Array.isArray(text) ? text : [text];
-      var side = onRight ? 'right' : 'left';
-      var li = 0, panel = null;
-      (function show() {
-        if (panel) panel.remove();
-        var line = lines[li];
-        panel = UI.FeedbackBubble(line, side);
-        // successGogo stands lower than wrongGogo — drop the bubble to his head
-        if (who === 'success') panel.style.top = '150px';
-        s.appendChild(panel);
-        A.playDialogue();
-        li++;
-        if (li < lines.length) {
-          setTimeout(function () {
-            if (document.body.contains(panel)) show();   // scene may have moved on
-          }, lineMs(line));
-        }
-      })();
-    }
-
     /* ---- DRAG-TO-MEASURE: the player drags hands into the span slots ------ *
      * The table defines `spans` invisible drop-zones across its width. A hand
      * sits on a podium (bottom-left); the player drags it into the NEXT empty
@@ -487,7 +517,20 @@ HS.Rounds = (function () {
         var teacher = null;   // the Gogo/ThinkGogo character shown during the tutorial demo
         var demoSource = null;   // the persistent hand on the podium during the demo (clones do the moving)
 
-        var REST = { left: 92, top: 548 };   // hand's resting spot (bottom-left)
+        var REST = { left: 92, top: 508 };   // hand's resting spot (bottom-left, lifted out of the
+                                             // corner but clear of the lounging Gogo's pointing finger)
+        // the resting spot reads as a glowing "handspan button": the purple
+        // podium art (assets/handDrag.svg) sits under the hovering hand, its
+        // light beam rising up behind the hand (hand z-index is higher)
+        var podW = Math.round(HW * 2.6), podH = Math.round(podW * 525 / 532);
+        var podium = el('img.drag-podium', { src: 'assets/handDrag.svg', alt: '', draggable: 'false' });
+        Object.assign(podium.style, {
+          left: (REST.left + HW / 2 - podW / 2) + 'px',
+          top: (REST.top + HW + 14 - Math.round(podH * 0.59)) + 'px',   // disc a beat below the hovering hand
+          width: podW + 'px', height: podH + 'px'
+        });
+        if (opts.tutorial) podium.style.display = 'none';   // revealed with the handspan
+        s.appendChild(podium);
 
         // sequential placement: the ONLY valid target is the next empty slot.
         // zones fill strictly left-to-right, so that's always index `filled`.
@@ -530,31 +573,6 @@ HS.Rounds = (function () {
             showDragNudge();
           }, 5000);
         }
-        // While the child HOLDS the handspan, a faded ghost hand loops along
-        // the same path, guiding where to place it.
-        var guideGhost = null;
-        function stopGuide() {
-          var g = guideGhost; guideGhost = null;
-          if (g) g.remove();
-        }
-        function startGuide() {
-          if (guideGhost || !alive || nextZone() < 0) return;
-          var g = demoHand(true);
-          guideGhost = g;
-          (function pass() {
-            if (guideGhost !== g || !alive) return;
-            var zi = nextZone();
-            if (zi < 0) { stopGuide(); return; }
-            g.style.transition = 'none'; g.style.opacity = '0.4';
-            g.style.left = REST.left + 'px'; g.style.top = REST.top + 'px';
-            moveArc(g, zones[zi].left, HAND_TOP, 1200).then(function () {
-              if (guideGhost !== g) return;
-              g.style.transition = 'opacity 0.25s ease'; g.style.opacity = '0';
-              setTimeout(pass, 360);
-            });
-          })();
-        }
-
         // The hand on the podium is a PERSISTENT source — it never moves. Each
         // drag lifts a CLONE that follows the pointer; on drop the clone is
         // placed (or discarded) and the source stays put for the next span.
@@ -600,7 +618,8 @@ HS.Rounds = (function () {
             document.addEventListener('pointermove', move);
             document.addEventListener('pointerup', up);
             document.addEventListener('pointercancel', up);
-            startGuide();   // ghost hand shows where this handspan goes
+            // no ghost-hand guide while dragging — the idle hand nudge (and the
+            // glowing target zone) is guidance enough
             A.playPop(); move(e); e.preventDefault();
           }
           function move(e) {
@@ -616,7 +635,6 @@ HS.Rounds = (function () {
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', up);
             document.removeEventListener('pointercancel', up);
-            stopGuide();
             clearTargets();
             var c = clone; clone = null;
             if (!c) return;
@@ -651,12 +669,13 @@ HS.Rounds = (function () {
         }
 
         function finishMeasure() {
-          alive = false; stopIdle(); stopGuide();
+          alive = false; stopIdle();
           // the standing instruction + teaching Gogo have served their purpose —
           // clear them so they don't collide with Gogo's success panel
           if (bubble) { bubble.remove(); bubble = null; }
           if (teacher) { var tg2 = teacher; teacher = null; UI.gogoVanish(tg2).then(function () { tg2.remove(); }); }
           if (curHand) { curHand.remove(); curHand = null; }   // remove the podium source
+          podium.remove();   // the empty button has nothing left to offer
           FX.celebrate();
           feedback(s, 'success', ['Well Done!', 'The table is ' + spans + ' handspans long!']);
           h.tapToContinue().then(function () { opts.onDone(); });
@@ -730,17 +749,15 @@ HS.Rounds = (function () {
         var DEMO_BUBBLE = {
           talk: { left: '430px', bottom: '600px' },
           think: { left: '410px', bottom: '600px' },
-          // the show pose raises a hand to the RIGHT of his head, so the only
-          // clear head-adjacent spot is ABOVE the turban — tail dropping onto it
-          show: { left: '250px', bottom: '615px' },
+          // lifted clear ABOVE the raised hand ("Now you try!" / "Drag the
+          // rest…") — the tail tip points down toward the hand without the
+          // bubble body ever clashing with it
+          show: { left: '385px', bottom: '615px' },
           wrong: { left: '390px', bottom: '600px' }
         };
         function demoBubbleAt(pose) { return DEMO_BUBBLE[pose] || DEMO_BUBBLE.talk; }
         // beside the head of the small horizontal Gogo down at the podium
         var PODIUM_BUBBLE = { left: '280px', bottom: '330px' };
-        // to the LEFT of the right-side "No!" Gogo — bottom-anchored so a
-        // two-line rule never collides with his turban, tail tip on his head
-        var RIGHT_BUBBLE = { right: '240px', bottom: '475px' };
         // Gogo speaks; the bubble sits beside him with its tail pointing at him.
         // `pose` picks the asset by the kind of line. Auto-advances after `ms`,
         // or waits for a tap if ms is 0.
@@ -757,26 +774,32 @@ HS.Rounds = (function () {
             else h.tapToContinue().then(function () { b.remove(); res(); });
           });
         }
-        // teleport the pointing (horizontal) Gogo to hover ABOVE stage x=cx,
-        // finger landing right on the spot that needs attention
-        function pointGogoAt(cx) {
-          return UI.gogoTeleport(teacher, function () {
-            UI.setGogoPose(teacher, 'horizontal');
-            Object.assign(teacher.style, { width: '250px', transition: '', left: (cx - 136) + 'px', top: '226px' });
-          });
+        // the pointing (horizontal) Gogo GLIDES alongside a moving hand — same
+        // duration as the hand's move so the two travel and settle TOGETHER,
+        // his finger landing right above stage x=cx. He hovers at ONE fixed
+        // height for every spot, so he never bobs down for a particular line.
+        var POINT_TOP = 226;
+        function glidePointGogo(cx, ms) {
+          if (!teacher) return;
+          UI.setGogoPose(teacher, 'horizontal');
+          teacher.style.width = '250px';
+          teacher.style.transition = 'left ' + ms + 'ms cubic-bezier(.4,.05,.4,1), top ' + ms + 'ms cubic-bezier(.4,.05,.4,1)';
+          requestAnimationFrame(function () { teacher.style.left = (cx - 136) + 'px'; teacher.style.top = POINT_TOP + 'px'; });
         }
         // bubble slot right BESIDE the hovering pointer-Gogo's head (turban top
         // sits ~290px when he hovers at top:226) — at head height on his right,
-        // tail curving down onto his face
-        function pointBubbleAt(cx) { return { left: (cx + 92) + 'px', top: '246px' }; }
-        // after pointing, Gogo vanishes and REAPPEARS ON THE RIGHT to say "No!"
-        // (far enough right that his bubble never collapses onto him)
-        function noFromRight() {
-          return UI.gogoTeleport(teacher, function () {
-            UI.setGogoPose(teacher, 'wrong');
-            // sized to visually MATCH the small pointing Gogo (not the full 315px)
-            Object.assign(teacher.style, { width: '215px', transition: '', left: '980px', top: '240px' });
-          }).then(function () { return verdict('No!', false, RIGHT_BUBBLE, 'right'); });
+        // tail curving down onto his face.
+        function pointBubbleAt(cx) { return { left: (cx + 92) + 'px', top: (POINT_TOP + 20) + 'px' }; }
+        // "No!" comes from the SAME hovering pointer-Gogo — he stays put,
+        // finger on the spot in question; only the bubble text changes
+        function noHere(cx) {
+          return new Promise(function (res) {
+            var b = UI.SayBubble('No!', 'left');
+            Object.assign(b.style, pointBubbleAt(cx));
+            s.appendChild(b);
+            A.playWrong();
+            setTimeout(function () { b.remove(); res(); }, 2000);
+          });
         }
         // teleport the teacher back to his corner
         function gogoHome(pose) {
@@ -818,6 +841,7 @@ HS.Rounds = (function () {
           });
           seq = seq.then(function () { return demoLine('We need to measure the table using hand spans.', 0, 'talk'); });
           seq = seq.then(function () {                              // 4. the handspan appears
+            podium.style.display = '';
             demoSource = demoHand(false);
             demoSource.style.transform = 'scale(0.3)'; demoSource.style.opacity = '0';
             demoSource.style.transition = 'transform 0.3s cubic-bezier(.2,1.5,.4,1), opacity 0.25s ease';
@@ -828,139 +852,78 @@ HS.Rounds = (function () {
           // "But How?" — the thinking genie
           seq = seq.then(function () { return demoLine('But How?', 0, 'think'); });
 
-          // (1) show the drag gesture with a faded ghost hand travelling to & fro
-          seq = seq.then(function () {
-            return new Promise(function (res) {
-              var b, arr;
-              var c = Promise.resolve();
-              // Gogo teleports down BESIDE THE HANDSPAN ("from here") FIRST, a
-              // smaller flying pose pointing at it...
-              c = c.then(function () {
-                return UI.gogoTeleport(teacher, function () {
-                  UI.setGogoPose(teacher, 'horizontal');
-                  Object.assign(teacher.style, { width: '250px', left: '16px', top: '330px' });
-                });
-              });
-              // ...and only then his line pops up RIGHT AT HIS HEAD down there
-              // (tail tip on his turban). It stays just long enough to read...
-              c = c.then(function () {
-                var line = "Let's drag a handspan from here to here.";
-                b = UI.SayBubble(line, 'left');
-                Object.assign(b.style, PODIUM_BUBBLE);
-                s.appendChild(b); A.playDialogue();
-                // the arrowhead lands INSIDE the first square, marking the drop spot
-                arr = makeArrow(REST.left + HW, REST.top + 6, L0 + HW * 0.35, HAND_TOP + HW / 2);
-                s.appendChild(arr);
-                return FX.wait(lineMs(line));   // read time BEFORE the ghost hand starts
-              });
-              // ...and goes AWAY the moment the ghost animation begins
-              c = c.then(function () {
-                if (b) { b.remove(); b = null; }
-              });
-              // ...then flies WITH the faded hand on EVERY pass — Gogo traces
-              // the here-to-here path in step with each ghost iteration.
-              function glideTeacher(x, y, ms) {
-                if (!teacher) return;
-                teacher.style.transition = 'left ' + ms + 'ms cubic-bezier(.4,.05,.4,1), top ' + ms + 'ms cubic-bezier(.4,.05,.4,1)';
-                requestAnimationFrame(function () { teacher.style.left = x + 'px'; teacher.style.top = y + 'px'; });
-              }
-              var ghost;
-              c = c.then(function () {                             // pass 1: to the slot
-                ghost = demoHand(true);
-                A.playWhoosh();
-                glideTeacher(L0 - 108, 226, 1300);
-                return moveArc(ghost, L0, HAND_TOP, 1300);
-              }).then(function () { return FX.wait(320); });
-              c = c.then(function () {                             // pass 2: back to the podium
-                A.playWhoosh();
-                glideTeacher(16, 330, 1100);
-                return moveArc(ghost, REST.left, REST.top, 1100);
-              }).then(function () { return FX.wait(220); });
-              c = c.then(function () {                             // pass 3: to the slot again
-                A.playWhoosh();
-                glideTeacher(L0 - 108, 226, 1300);
-                return moveArc(ghost, L0, HAND_TOP, 1300);
-              }).then(function () { return FX.wait(360); });
-              // Gogo teleports back to his teaching corner (neutral talk pose —
-              // no lingering ShowingGogo)
-              c = c.then(function () {
-                return UI.gogoTeleport(teacher, function () {
-                  UI.setGogoPose(teacher, 'talk');
-                  Object.assign(teacher.style, { width: '', transition: '', left: GOGO_SPOT.left, top: GOGO_SPOT.top });
-                });
-              });
-              c.then(function () {
-                if (ghost) { ghost.style.transition = 'opacity .3s ease'; ghost.style.opacity = '0'; }
-                arr.remove();
-                setTimeout(function () { if (ghost) ghost.remove(); if (b) b.remove(); res(); }, 320);
-              });
-            });
-          });
-
-          // (2) HAND 1 — try wrong spots, then land at the start line
-          var hand1;
-          // For each wrong spot, the pointing (horizontal) Gogo hovers right
-          // above the hand — finger on the exact place in question — and a
-          // breather separates each "Here?" -> "No!" cycle.
-          var MID_CX = MID + HW / 2, LEFT_CX = LEFTSIDE + HW / 2, ON_CX = ONLINE + HW / 2;
-          seq = seq.then(function () { hand1 = demoHand(false); A.playWhoosh(); return moveArc(hand1, MID, HAND_TOP, 1300); });
-          seq = seq.then(function () { return pointGogoAt(MID_CX); });
-          seq = seq.then(function () { return demoLine('Can we keep it here?', 2300, null, pointBubbleAt(MID_CX)); });
-          seq = seq.then(function () { return noFromRight(); });
-          seq = seq.then(function () { return FX.wait(1200); });
-          seq = seq.then(function () { A.playWhoosh(); return moveTo(hand1, LEFTSIDE, HAND_TOP, 950); });
-          seq = seq.then(function () { return pointGogoAt(LEFT_CX); });
-          seq = seq.then(function () { return demoLine('Here?', 2000, null, pointBubbleAt(LEFT_CX)); });
-          seq = seq.then(function () { return noFromRight(); });
-          seq = seq.then(function () { return FX.wait(1200); });
-          seq = seq.then(function () { A.playWhoosh(); return moveTo(hand1, ONLINE, HAND_TOP, 900); });
-          seq = seq.then(function () { return pointGogoAt(ON_CX); });
-          seq = seq.then(function () { return demoLine('Here?', 2000, null, pointBubbleAt(ON_CX)); });
-          seq = seq.then(function () { return noFromRight(); });
-          seq = seq.then(function () { return FX.wait(1200); });
-          seq = seq.then(function () { return gogoHome('talk'); });
-          seq = seq.then(function () { A.playWhoosh(); return moveTo(hand1, L0, HAND_TOP, 850); });
-          seq = seq.then(function () { lockDemoHand(hand1, 0); return demoLine('Yes! Start right at the line.', 2500, 'talk'); });
-
-          // (3) HAND 2 — overlap, then gap, then flush (the "no gaps, no overlaps" rule)
-          // Same pattern as hand 1: the pointing (horizontal) Gogo hovers over
-          // the hand in question, and the "No!" + rule come from the right side.
-          var OVERLAP_CX = OVERLAP + HW / 2, GAP_CX = GAP + HW / 2, L1_CX = L1 + HW / 2;
-          var hand2;
-          // As in the first demo: Gogo flies down beside the podium pointing at
-          // the handspan, his line pops up at his head, and a faded ghost hand
-          // replays the drag gesture (Gogo gliding along) to the next slot.
+          // (1) Gogo flies down BESIDE THE HANDSPAN on its podium — a smaller
+          // flying pose pointing at it — and introduces the drag. NO guide
+          // arrow and NO correct-spot preview in the tutorial (the real game
+          // rounds keep their own first-drag arrow): the tutorial teaches by
+          // taking the hand straight to the WRONG spots first, Gogo gliding
+          // along in sync the whole way.
           seq = seq.then(function () {
             return UI.gogoTeleport(teacher, function () {
               UI.setGogoPose(teacher, 'horizontal');
               Object.assign(teacher.style, { width: '250px', left: '16px', top: '330px' });
             });
           });
-          seq = seq.then(function () { return demoLine("Let's drag the next handspan.", 0, null, PODIUM_BUBBLE); });
+          // his line pops up RIGHT AT HIS HEAD down there (tail tip on his
+          // turban), stays just long enough to read, then the tour begins
+          seq = seq.then(function () { return demoLine("Let's drag the first handspan.", 2400, null, PODIUM_BUBBLE); });
+
+          // (2) HAND 1 — the hand tries the wrong spots, then lands at the
+          // start line.
+          var hand1;
+          // For each wrong spot, the pointing (horizontal) Gogo hovers right
+          // above the hand — finger on the exact place in question — and a
+          // breather separates each "Here?" -> "No!" cycle.
+          var MID_CX = MID + HW / 2, LEFT_CX = LEFTSIDE + HW / 2, ON_CX = ONLINE + HW / 2;
+          seq = seq.then(function () { hand1 = demoHand(false); A.playWhoosh(); glidePointGogo(MID_CX, 1300); return moveArc(hand1, MID, HAND_TOP, 1300); });
+          seq = seq.then(function () { return demoLine('Can we keep it here?', 2300, null, pointBubbleAt(MID_CX)); });
+          seq = seq.then(function () { return noHere(MID_CX); });
+          seq = seq.then(function () { return FX.wait(1200); });
+          seq = seq.then(function () { A.playWhoosh(); glidePointGogo(LEFT_CX, 950); return moveTo(hand1, LEFTSIDE, HAND_TOP, 950); });
+          seq = seq.then(function () { return demoLine('Here?', 2000, null, pointBubbleAt(LEFT_CX)); });
+          seq = seq.then(function () { return noHere(LEFT_CX); });
+          seq = seq.then(function () { return FX.wait(1200); });
+          // last wrong spot: Gogo glides across at the SAME hover height as the
+          // other spots, finger settling right above the straddling hand
+          seq = seq.then(function () { A.playWhoosh(); glidePointGogo(ON_CX, 900); return moveTo(hand1, ONLINE, HAND_TOP, 900); });
+          seq = seq.then(function () { return demoLine('Here?', 2000, null, pointBubbleAt(ON_CX)); });
+          seq = seq.then(function () { return noHere(ON_CX); });
+          seq = seq.then(function () { return FX.wait(1200); });
+          // THE START RULE — the straddling hand's centre IS the start line
+          // (ON_CX === TRACK_X0), so Gogo is ALREADY there, finger on the
+          // handspan; he says the rule without moving at all
+          seq = seq.then(function () { return demoLine('We must start from one end of the table.', 2600, null, pointBubbleAt(TRACK_X0)); });
+          // ...and only THEN the straddling hand slides to the correct spot,
+          // landing right under his pointing finger
+          seq = seq.then(function () { A.playWhoosh(); return moveTo(hand1, L0, HAND_TOP, 850); });
+          seq = seq.then(function () { return FX.wait(350); });
+          seq = seq.then(function () { return gogoHome('talk'); });
+          seq = seq.then(function () { lockDemoHand(hand1, 0); return demoLine('Yes! Start right at the line.', 2500, 'talk'); });
+
+          // (3) HAND 2 — overlap, then gap, then flush (the "no gaps, no overlaps" rule)
+          // Same pattern as hand 1: Gogo flies down beside the podium, says his
+          // line, and the hand goes STRAIGHT to the wrong (overlap) spot —
+          // no correct-slot preview — with Gogo gliding along in sync.
+          var OVERLAP_CX = OVERLAP + HW / 2, GAP_CX = GAP + HW / 2, L1_CX = L1 + HW / 2;
+          var hand2;
           seq = seq.then(function () {
-            var ghost = demoHand(true);
-            A.playWhoosh();
-            teacher.style.transition = 'left 1300ms cubic-bezier(.4,.05,.4,1), top 1300ms cubic-bezier(.4,.05,.4,1)';
-            requestAnimationFrame(function () { teacher.style.left = (L1 - 108) + 'px'; teacher.style.top = '226px'; });
-            return moveArc(ghost, L1, HAND_TOP, 1300).then(function () {
-              ghost.style.transition = 'opacity .3s ease'; ghost.style.opacity = '0';
-              return FX.wait(320).then(function () { ghost.remove(); });
+            return UI.gogoTeleport(teacher, function () {
+              UI.setGogoPose(teacher, 'horizontal');
+              Object.assign(teacher.style, { width: '250px', left: '16px', top: '330px' });
             });
           });
-          seq = seq.then(function () { hand2 = demoHand(false); A.playWhoosh(); return moveArc(hand2, OVERLAP, HAND_TOP, 1300); });
-          seq = seq.then(function () { return pointGogoAt(OVERLAP_CX); });
+          seq = seq.then(function () { return demoLine("Let's drag the next handspan.", 2400, null, PODIUM_BUBBLE); });
+          seq = seq.then(function () { hand2 = demoHand(false); A.playWhoosh(); glidePointGogo(OVERLAP_CX, 1300); return moveArc(hand2, OVERLAP, HAND_TOP, 1300); });
           seq = seq.then(function () { return demoLine('Can we keep it here?', 2300, null, pointBubbleAt(OVERLAP_CX)); });
-          seq = seq.then(function () { return noFromRight(); });
-          seq = seq.then(function () { return demoLine('Handspans must not overlap.', 2900, null, RIGHT_BUBBLE, 'right'); });
+          seq = seq.then(function () { return noHere(OVERLAP_CX); });
+          seq = seq.then(function () { return demoLine('Handspans must not overlap.', 2900, null, pointBubbleAt(OVERLAP_CX)); });
           seq = seq.then(function () { return FX.wait(1000); });
-          seq = seq.then(function () { A.playWhoosh(); return moveTo(hand2, GAP, HAND_TOP, 950); });
-          seq = seq.then(function () { return pointGogoAt(GAP_CX); });
+          seq = seq.then(function () { A.playWhoosh(); glidePointGogo(GAP_CX, 950); return moveTo(hand2, GAP, HAND_TOP, 950); });
           seq = seq.then(function () { return demoLine('Then can we keep it here?', 2300, null, pointBubbleAt(GAP_CX)); });
-          seq = seq.then(function () { return noFromRight(); });
-          seq = seq.then(function () { return demoLine('There must be no gap between two handspans.', 2900, null, RIGHT_BUBBLE, 'right'); });
+          seq = seq.then(function () { return noHere(GAP_CX); });
+          seq = seq.then(function () { return demoLine('There must be no gap between two handspans.', 2900, null, pointBubbleAt(GAP_CX)); });
           seq = seq.then(function () { return FX.wait(1000); });
-          seq = seq.then(function () { A.playWhoosh(); return moveTo(hand2, L1, HAND_TOP, 850); });
-          seq = seq.then(function () { return pointGogoAt(L1_CX); });
+          seq = seq.then(function () { A.playWhoosh(); glidePointGogo(L1_CX, 850); return moveTo(hand2, L1, HAND_TOP, 850); });
           seq = seq.then(function () { lockDemoHand(hand2, 1); return demoLine('Then can we keep it here?', 2200, null, pointBubbleAt(L1_CX)); });
           seq = seq.then(function () { return gogoHome('talk'); });
           seq = seq.then(function () { return verdict('Yes!', true); });
@@ -1127,31 +1090,152 @@ HS.Rounds = (function () {
   }
 
   /* ====================================================================== *
+   * FIXED-SEQUENCE SHOWCASE HALL — shared by the cloth & candle flows
+   * ----------------------------------------------------------------------
+   * Mirrors the Hall of Tables exactly: on entry the JUST-measured item
+   * holds the focus, bright, with its "N handspans" chip — then it glides
+   * aside, the next item comes into focus, and a hand nudge invites the
+   * tap. On the FIRST entry the three items open as a flat, equal row (all
+   * fully on screen), then the first one grows into focus and glows.
+   * No arrows, no rotation, no panels, no Gogo — the order is fixed.
+   * opts: { bg, carouselClass, glowClass, makeNode(item), spansOf(item),
+   *         onPick(index), blurIntro }
+   * ====================================================================== */
+  function fixedHall(h, st, opts) {
+    h.setBackground(opts.bg);
+    var n = st.list.length;
+    // start centred on the item we just measured (recap), if any
+    st.center = st.measured.length ? st.measured[st.measured.length - 1] : 0;
+
+    h.transitionTo(function () {
+      var s = h.scene();
+      var carousel = el('div.hall-carousel hall-carousel--fixed ' + opts.carouselClass);
+      // first entry opens on a FLAT equal row — the focus animation follows
+      var introMode = !st.measured.length;
+      if (introMode) carousel.classList.add('hall-carousel--intro');
+      // blurIntro: the first entry opens like the table showcase — the room
+      // BLURRED and UNLIT behind the flat row; the blur lifts and the beam
+      // snaps on as the focus move begins
+      var bgEl = document.getElementById('bg');
+      if (introMode && opts.blurIntro) {
+        bgEl.classList.add('tut-blur');
+        carousel.classList.add('hall-carousel--unlit');
+      }
+      carousel.appendChild(el('div.select-glow'));
+
+      var cards = st.list.map(function (item, i) {
+        var card = el('div.hall-card', { dataset: { idx: String(i) } });
+        card._node = opts.makeNode(item);
+        card.appendChild(card._node);
+        if (st.measured.indexOf(i) >= 0) {
+          card.classList.add('hall-card--done');
+          card.appendChild(el('div.hall-card__done', { text: opts.spansOf(item) + ' handspans' }));
+        }
+        carousel.appendChild(card);
+        return card;
+      });
+      s.appendChild(carousel);
+
+      var nudge = UI.HandNudge();
+      nudge.classList.add('hand-nudge--tap');
+      // hidden until the entrance recap finishes and the next item is in focus
+      Object.assign(nudge.style, { left: '52%', top: '48%', display: 'none' });
+      s.appendChild(nudge);
+
+      function isDone(i) { return st.measured.indexOf(i) >= 0; }
+      function layout() {
+        cards.forEach(function (card, i) {
+          card.classList.remove('is-center', 'is-left', 'is-right');
+          var rel = (i - st.center + n) % n;
+          card.classList.add(rel === 0 ? 'is-center' : (rel === 1 ? 'is-right' : 'is-left'));
+          // the glow marks the next-in-line item only once it holds the focus
+          card._node.classList.toggle(opts.glowClass, !introMode && rel === 0 && !isDone(i));
+        });
+      }
+      layout();
+
+      // the sequence is FIXED: only the centred, next-in-line item is tappable
+      var picked = false;   // guards against double-taps re-running the round
+      cards.forEach(function (card, i) {
+        card.addEventListener('mouseenter', function () {
+          if (card.classList.contains('is-center') && !isDone(i)) A.playHover();
+        });
+        card.addEventListener('click', function () {
+          if (picked || !card.classList.contains('is-center') || isDone(i)) return;
+          picked = true;
+          A.playClick(); nudge.remove();
+          bgEl.classList.remove('tut-blur');   // never carry the intro blur forward
+          var c = FX.centerOf(card);
+          FX.sparkleBurst(c.x, c.y, { count: 18, spread: 130 });
+          FX.ringBurst(c.x, c.y, '#FFD54A');
+          card._node.style.transition = 'transform 0.45s cubic-bezier(.3,1.5,.4,1)';
+          card._node.style.transform = 'scale(1.08)';
+          setTimeout(function () { opts.onPick(i); }, 460);
+        });
+      });
+
+      // ENTRANCE RECAP (after a measure): the just-measured item holds the
+      // focus with its chip — then it glides aside, the next item comes into
+      // focus, and only then the hand nudge appears.
+      var run;
+      if (st.measured.length) {
+        var prevCard = cards[st.center];
+        prevCard.classList.add('hall-card--recap');
+        prevCard._node.classList.add(opts.glowClass);
+        // the festive overlay still covers the scene for ~1.3s after it is
+        // built — hold the recap long enough that it plays out in full view
+        run = FX.wait(3000).then(function () {
+          prevCard.classList.remove('hall-card--recap');
+          A.playWhoosh();
+          for (var k = 1; k <= n; k++) {                 // next unmeasured item
+            var idx = (st.center + k) % n;
+            if (!isDone(idx)) { st.center = idx; break; }
+          }
+          layout();                                      // the recap card glides aside
+          return FX.wait(900);
+        });
+      } else {
+        // ENTRANCE (first entry): the items hold as a flat, equal row (behind
+        // a blurred room when blurIntro) while the festive overlay clears —
+        // then the blur lifts, the first one GROWS into focus (the sides
+        // recede and fade), and only then the nudge appears
+        run = FX.wait(opts.blurIntro ? 3200 : 2200).then(function () {
+          A.playWhoosh();
+          if (opts.blurIntro) A.playLightsOn();          // the beam snaps on with the move
+          bgEl.classList.remove('tut-blur');
+          carousel.classList.remove('hall-carousel--unlit');
+          carousel.classList.remove('hall-carousel--intro');
+          introMode = false;
+          layout();                                      // the focused item now glows
+          return FX.wait(900);
+        });
+      }
+      return run.then(function () {
+        if (!document.body.contains(nudge)) return;
+        // pin the tap cursor's FINGERTIP (30%/20% of the 45px art) right on
+        // the centred item itself, whatever its size or floor line
+        var c = FX.centerOf(cards[st.center]._node);
+        Object.assign(nudge.style, { left: (c.x - 13) + 'px', top: (c.y - 13) + 'px' });
+        UI.idleNudge(nudge, { onShow: function () { A.playPop(); } });
+        nudge.style.display = '';
+        A.playPop();
+      });
+    });
+  }
+
+  /* ====================================================================== *
    * CANDLE-STAND ROUND — VERTICAL measuring (find the 5-handspan stand)
    * ----------------------------------------------------------------------
-   * Same loop as the table hall, rotated 90°: three candle stands (5, 3, 7
-   * handspans TALL), measured top-to-bottom, so the dashed guides are
-   * HORIZONTAL — one at the cup rim, one at the base — and the hands stack
-   * vertically between them.
+   * Same loop as the table hall, rotated 90°: three candle stands (3, 6, 5
+   * handspans TALL — the 5-span target measured last, then bagged), measured
+   * top-to-bottom, so the dashed guides are HORIZONTAL — one at the cup rim,
+   * one at the base — and the hands stack vertically between them.
    * ====================================================================== */
   // candleStandClean.png: cup rim at 0.111 of its height, base at 0.753,
   // (visible height = 0.642 of the image); image aspect w/h = 1536/1024 = 1.5.
   var CANDLE = { src: 'assets/candleStandClean.webp', ar: 1536 / 1024, topF: 0.111, botF: 0.753 };
   var CANDLE_VIS = CANDLE.botF - CANDLE.topF;   // 0.642
   var candleState = null;
-
-  // a shared genie + purple feedback panel (mirrors the table round's feedback)
-  function feedbackPanel(s, who, text) {
-    var src = who === 'success' ? 'assets/successGogo.webp'
-            : who === 'wrong' ? 'assets/wrongGogo.webp'
-            : 'assets/ShowingGogo.webp';
-    var onRight = who === 'wrong';
-    var gogo = el('img.feedback-gogo feedback-gogo--' + who + ' ' + (onRight ? 'feedback-gogo--right' : 'feedback-gogo--left'), { src: src, alt: '', draggable: 'false' });
-    s.appendChild(gogo);
-    if (who === 'success') A.playClap();   // cheer whenever successGogo appears
-    s.appendChild(UI.FeedbackBubble(text, onRight ? 'right' : 'left'));
-    A.playDialogue();
-  }
 
   // a candle-stand wrapper whose VISIBLE height (cup rim -> base) = visH px.
   // The wrapper's bottom edge is cropped to the BASE (botF of the image) — the
@@ -1169,103 +1253,30 @@ HS.Rounds = (function () {
   }
 
   function startCandles(config, h) {
-    candleState = {
-      spansList: [5, 3, 7],   // index 0 = the target (5 handspans)
-      target: 5,
-      measured: [],
-      introShown: false,
-      center: 0
-    };
+    // measured in list order: 3, then 6, then the 5-span target (bagged last)
+    candleState = { list: [3, 6, 5], target: 5, measured: [], center: 0 };
     h.festiveTransition(function () { candleHall(config, h); }, 'The Candle Hall!');
   }
 
-  /* ---- carousel of candle stands (pick one to measure) ----------------- */
+  /* ---- fixed-sequence candle showcase (no arrows, no rotation) ---------- */
   function candleHall(config, h) {
-    h.setBackground('play');
-    for (var k = 0; k < candleState.spansList.length; k++) {
-      if (candleState.measured.indexOf((candleState.center + k) % candleState.spansList.length) < 0) {
-        candleState.center = (candleState.center + k) % candleState.spansList.length; break;
-      }
-    }
-    h.transitionTo(function () {
-      var s = h.scene();
-      var carousel = el('div.hall-carousel');
-      carousel.appendChild(el('div.select-glow'));
-
-      var cards = candleState.spansList.map(function (spans, i) {
-        var card = el('div.hall-card', { dataset: { idx: String(i) } });
-        var c = candleImg(30 * spans);   // taller stand -> more handspans
-        card._candle = c;
-        card.appendChild(c);
-        if (candleState.measured.indexOf(i) >= 0) {
-          card.classList.add('hall-card--done');
-          card.appendChild(el('div.hall-card__done', { text: spans + ' handspans' }));
-        }
-        carousel.appendChild(card);
-        return card;
-      });
-      s.appendChild(carousel);
-
-      var leftArrow = el('button.hall-arrow hall-arrow--left', { type: 'button' }, '‹');
-      var rightArrow = el('button.hall-arrow hall-arrow--right', { type: 'button' }, '›');
-      s.appendChild(leftArrow); s.appendChild(rightArrow);
-
-      var nudge = UI.HandNudge();
-      nudge.classList.add('hand-nudge--tap');
-      Object.assign(nudge.style, { left: '52%', top: '48%', display: 'none' });
-      s.appendChild(nudge);
-
-      var n = cards.length;
-      function isDone(i) { return candleState.measured.indexOf(i) >= 0; }
-      function layout() {
-        cards.forEach(function (card, i) {
-          card.classList.remove('is-center', 'is-left', 'is-right');
-          var rel = (i - candleState.center + n) % n;
-          card.classList.add(rel === 0 ? 'is-center' : (rel === 1 ? 'is-right' : 'is-left'));
-          card._candle.classList.toggle('candle--glow', rel === 0 && !isDone(i));
-        });
-      }
-      layout();
-      function rotate(dir) { A.playHover(); nudge.style.display = 'none'; candleState.center = (candleState.center + dir + n) % n; layout(); }
-      leftArrow.addEventListener('click', function () { rotate(-1); });
-      rightArrow.addEventListener('click', function () { rotate(1); });
-
-      var picked = false;   // guards against double-taps re-running the round
-      cards.forEach(function (card, i) {
-        card.addEventListener('mouseenter', function () { A.playHover(); });
-        card.addEventListener('click', function () {
-          if (picked) return;
-          if (!card.classList.contains('is-center')) { candleState.center = i; layout(); A.playHover(); nudge.style.display = 'none'; return; }
-          if (isDone(i)) { FX.shake(card); A.playWrong(); return; }
-          picked = true;
-          A.playClick(); nudge.remove();
-          var c = FX.centerOf(card);
-          FX.sparkleBurst(c.x, c.y, { count: 18, spread: 130 });
-          FX.ringBurst(c.x, c.y, '#FFD54A');
-          card._candle.style.transition = 'transform 0.45s cubic-bezier(.3,1.5,.4,1)';
-          card._candle.style.transform = 'scale(1.1)';
-          setTimeout(function () { measureCandle(config, h, i); }, 460);
-        });
-      });
-
-      var run = Promise.resolve();
-      if (!candleState.introShown) {
-        candleState.introShown = true;
-        run = run.then(function () { return sayGogo(h, s, 'Now find the candle stand that is ' + candleState.target + ' handspans TALL.'); })
-                 .then(function () { return sayGogo(h, s, 'Pick a candle stand to measure.'); });
-      } else {
-        run = run.then(function () { return sayGogo(h, s, 'Pick another candle stand to measure.'); });
-      }
-      return run.then(function () { if (document.body.contains(nudge)) { UI.idleNudge(nudge, { onShow: function () { A.playPop(); } }); } });
+    fixedHall(h, candleState, {
+      bg: 'play',
+      carouselClass: 'hall-carousel--candle',
+      blurIntro: true,   // first entry: blurred room -> focus move (like the table showcase)
+      glowClass: 'candle--glow',
+      makeNode: function (spans) { return candleImg(30 * spans); },   // taller stand -> more handspans
+      spansOf: function (spans) { return spans; },
+      onPick: function (i) { measureCandle(config, h, i); }
     });
   }
 
   function measureCandle(config, h, index) {
     playCandleRound(config, h, {
-      spans: candleState.spansList[index],
+      spans: candleState.list[index],
       onDone: function () {
         candleState.measured.push(index);
-        if (candleState.measured.length >= candleState.spansList.length) candleSuccess(config, h);
+        if (candleState.measured.length >= candleState.list.length) candleSuccess(config, h);
         else h.festiveTransition(function () { candleHall(config, h); }, 'Next stand!');
       }
     });
@@ -1276,12 +1287,20 @@ HS.Rounds = (function () {
     h.setBackground('play');
     var spans = opts.spans;
     var HV = 58;                 // vertical hand unit
-    var CX = 640;                // horizontal centre
-    var BASE_Y = 612;            // bottom guide (base of the stand)
+    var CX = 640;                // horizontal centre — EVERY stand's base is centred
+                                 // here (the base is centred in the art), so the
+                                 // standing x never shifts between rounds
+    var BASE_Y = 452;            // the base sits on the SAME floor line as the table flow
+    // The hand column measures BESIDE the stand, never on top of it: it hugs
+    // the stand's solid base edge (alpha-measured at 0.179 of the image width
+    // per side) with a small gap, whatever the stand's size.
+    var visH = HV * spans;
+    var imgW = (visH / CANDLE_VIS) * CANDLE.ar;
+    var BASE_HALF = 0.179 * imgW;
+    var STACK_LEFT = CX - BASE_HALF - 12 - HV;        // hand-box left, just left of the base
 
     function buildStage(s) {
       s.appendChild(UI.Vignette());
-      var visH = HV * spans;
       var topY = BASE_Y - visH;
       var wrap = candleImg(visH);
       Object.assign(wrap.style, {
@@ -1291,21 +1310,21 @@ HS.Rounds = (function () {
       s.appendChild(wrap);
       var layer = el('div', { style: { position: 'absolute', inset: '0', zIndex: '20' } });
       s.appendChild(layer);
-      var half = 118;
-      var g = UI.MeasureGuideH(CX - half, CX + half, topY, BASE_Y);
+      // the guides bracket the hand column AND the stand together
+      var g = UI.MeasureGuideH(STACK_LEFT - 12, CX + BASE_HALF + 24, topY, BASE_Y);
       s.appendChild(g);
       requestAnimationFrame(function () { g.reveal(); });
       return layer;
     }
 
-    // stack `count` hand slots vertically, base upward (each HV tall)
+    // stack `count` hand slots vertically BESIDE the stand, base upward
     function placeStack(layer, variant, count, anim) {
       var nn = count != null ? count : spans;
       var nodes = [];
       for (var i = 0; i < nn; i++) {
         var node = UI.HandSpan({ variant: variant, w: HV, h: HV, anim: anim });
         node.classList.add('handspan--vert');   // rotate the hand to measure vertically
-        Object.assign(node.style, { position: 'absolute', left: (CX - HV / 2) + 'px', top: (BASE_Y - HV * (i + 1)) + 'px' });
+        Object.assign(node.style, { position: 'absolute', left: STACK_LEFT + 'px', top: (BASE_Y - HV * (i + 1)) + 'px' });
         layer.appendChild(node);
         nodes.push(node);
       }
@@ -1316,8 +1335,10 @@ HS.Rounds = (function () {
       h.transitionTo(function () {
         var s = h.scene();
         buildStage(s);
+        // just before play: the ONE instruction panel comes, is read, and
+        // goes away — only then the guess tray appears
         return FX.wait(200)
-          .then(function () { instruct(s, 'Guess how many handspans tall the candle stand is.'); return FX.wait(200); })
+          .then(function () { return instructOnce(s, 'Guess how many handspans tall the candle stand is.'); })
           .then(function () { return h.guessPhase({ answer: spans }); })
           .then(function (sel) { if (sel === spans) successScreen(); else wrongScreen(sel); });
       });
@@ -1330,7 +1351,7 @@ HS.Rounds = (function () {
         slots.forEach(function (n) { n.style.opacity = '0'; });
         return FX.wait(350)
           .then(function () { return h.measureFly({ slots: slots, unit: HV }); })
-          .then(function () { FX.celebrate(); feedbackPanel(s, 'success', 'Hurray! This stand is ' + spans + ' handspans tall.'); return h.tapToContinue(); })
+          .then(function () { FX.celebrate(); feedback(s, 'success', 'Hurray! This stand is ' + spans + ' handspans tall.'); return h.tapToContinue(); })
           .then(function () { opts.onDone(); });
       });
     }
@@ -1343,7 +1364,7 @@ HS.Rounds = (function () {
         slots.forEach(function (n) { n.style.opacity = '0'; });
         return FX.wait(350)
           .then(function () { return h.measureFly({ slots: slots, unit: HV }); })
-          .then(function () { A.playWrong(); feedbackPanel(s, 'wrong', 'Let us try again.'); return h.tapToContinue(); })
+          .then(function () { A.playWrong(); feedback(s, 'wrong', 'Let us try again.'); return h.tapToContinue(); })
           .then(function () { clueScreen(); });
       });
     }
@@ -1352,7 +1373,7 @@ HS.Rounds = (function () {
         var s = h.scene();
         var layer = buildStage(s);
         placeStack(layer, 'solid', null, true);
-        feedbackPanel(s, 'clue', 'Here is a clue. It should look like this.');
+        feedback(s, 'clue', 'Here is a clue. It should look like this.');
         return h.tapToContinue().then(function () { guessScreen(); });
       });
     }
@@ -1371,7 +1392,7 @@ HS.Rounds = (function () {
       s.appendChild(wrap);
 
       var run = Promise.resolve();
-      run = run.then(function () { FX.celebrate(wrap); return sayGogo(h, s, 'You found it! This candle stand is ' + candleState.target + ' handspans tall!'); });
+      run = run.then(function () { FX.celebrate(wrap); return panelSay(h, s, 'You found it! This candle stand is ' + candleState.target + ' handspans tall!'); });
       run = run.then(function () { return sackAnim(h, s, wrap); });
       // ... candles are the LAST round -> the finale
       run = run.then(function () { endScreen(config, h, 'You found the ' + candleState.target + '-handspan candle stand!'); });
@@ -1380,19 +1401,20 @@ HS.Rounds = (function () {
   }
 
   /* ====================================================================== *
-   * CLOTH ROUND — HORIZONTAL measuring (find the 9-handspan cloth)
+   * CLOTH ROUND — HORIZONTAL measuring (find the 8-handspan cloth)
    * ----------------------------------------------------------------------
-   * A third loop, same idea as the tables but with cloths in a different room
-   * (Bgm2): three cloths (7, 9, 12 handspans WIDE), measured left-to-right with
-   * VERTICAL guides at each cloth's side edges. Cloth2 (9) is the target that
-   * Gogo bags at the end.
+   * A second loop, same idea as the tables but with cloths in a different
+   * room (Bgm2): three cloths (10, 7, 8 handspans WIDE), measured
+   * left-to-right with VERTICAL guides at each cloth's side edges, in that
+   * fixed order — the BLUE cloth (Cloth2, 8 spans) is the target, measured
+   * last, that Gogo bags at the end.
    * ====================================================================== */
   var CLOTHS = [
-    { src: 'assets/Cloth1.webp', spans: 7,  e0: 0.0291, e1: 0.9717, botF: 0.9569, ar: 0.5583 },
-    { src: 'assets/Cloth2.webp', spans: 9,  e0: 0.0551, e1: 0.9437, botF: 0.9423, ar: 0.5626 },  // target
-    { src: 'assets/Cloth3.webp', spans: 12, e0: 0.0413, e1: 0.9526, botF: 0.9475, ar: 0.5632 }
+    { src: 'assets/Cloth1.webp', spans: 10, e0: 0.0291, e1: 0.9717, botF: 0.9569, ar: 0.5583 },  // red
+    { src: 'assets/Cloth3.webp', spans: 7,  e0: 0.0413, e1: 0.9526, botF: 0.9475, ar: 0.5632 },  // white
+    { src: 'assets/Cloth2.webp', spans: 8,  e0: 0.0551, e1: 0.9437, botF: 0.9423, ar: 0.5626 }   // blue — target
   ];
-  var CLOTH_TARGET = 9;
+  var CLOTH_TARGET = 8;
   var clothState = null;
 
   // a cloth wrapper whose measurable width (edge e0->e1) = trackW px
@@ -1406,86 +1428,19 @@ HS.Rounds = (function () {
   }
 
   function startCloths(config, h) {
-    clothState = { list: CLOTHS, target: CLOTH_TARGET, measured: [], introShown: false, center: 0 };
+    clothState = { list: CLOTHS, target: CLOTH_TARGET, measured: [], center: 0 };
     h.festiveTransition(function () { clothHall(config, h); }, '');
   }
 
-  /* ---- carousel of cloths (pick one to measure) ------------------------ */
+  /* ---- fixed-sequence cloth showcase (flow 2: no free selection) -------- */
   function clothHall(config, h) {
-    h.setBackground('cloth');
-    for (var k = 0; k < clothState.list.length; k++) {
-      if (clothState.measured.indexOf((clothState.center + k) % clothState.list.length) < 0) {
-        clothState.center = (clothState.center + k) % clothState.list.length; break;
-      }
-    }
-    h.transitionTo(function () {
-      var s = h.scene();
-      var carousel = el('div.hall-carousel hall-carousel--cloth');
-      carousel.appendChild(el('div.select-glow'));
-
-      var cards = clothState.list.map(function (art, i) {
-        var card = el('div.hall-card', { dataset: { idx: String(i) } });
-        var c = clothImg(art, 52 * art.spans);   // wider cloth -> more handspans (bigger display)
-        card._cloth = c;
-        card.appendChild(c);
-        if (clothState.measured.indexOf(i) >= 0) {
-          card.classList.add('hall-card--done');
-          card.appendChild(el('div.hall-card__done', { text: art.spans + ' handspans' }));
-        }
-        carousel.appendChild(card);
-        return card;
-      });
-      s.appendChild(carousel);
-
-      var leftArrow = el('button.hall-arrow hall-arrow--left', { type: 'button' }, '‹');
-      var rightArrow = el('button.hall-arrow hall-arrow--right', { type: 'button' }, '›');
-      s.appendChild(leftArrow); s.appendChild(rightArrow);
-
-      var nudge = UI.HandNudge();
-      nudge.classList.add('hand-nudge--tap');
-      Object.assign(nudge.style, { left: '52%', top: '48%', display: 'none' });
-      s.appendChild(nudge);
-
-      var n = cards.length;
-      function isDone(i) { return clothState.measured.indexOf(i) >= 0; }
-      function layout() {
-        cards.forEach(function (card, i) {
-          card.classList.remove('is-center', 'is-left', 'is-right');
-          var rel = (i - clothState.center + n) % n;
-          card.classList.add(rel === 0 ? 'is-center' : (rel === 1 ? 'is-right' : 'is-left'));
-          card._cloth.classList.toggle('cloth--glow', rel === 0 && !isDone(i));
-        });
-      }
-      layout();
-      function rotate(dir) { A.playHover(); nudge.style.display = 'none'; clothState.center = (clothState.center + dir + n) % n; layout(); }
-      leftArrow.addEventListener('click', function () { rotate(-1); });
-      rightArrow.addEventListener('click', function () { rotate(1); });
-
-      cards.forEach(function (card, i) {
-        card.addEventListener('mouseenter', function () { A.playHover(); });
-        card.addEventListener('click', function () {
-          if (!card.classList.contains('is-center')) { clothState.center = i; layout(); A.playHover(); nudge.style.display = 'none'; return; }
-          if (isDone(i)) { FX.shake(card); A.playWrong(); return; }
-          A.playClick(); nudge.remove();
-          var c = FX.centerOf(card);
-          FX.sparkleBurst(c.x, c.y, { count: 18, spread: 130 });
-          FX.ringBurst(c.x, c.y, '#FFD54A');
-          card._cloth.style.transition = 'transform 0.45s cubic-bezier(.3,1.5,.4,1)';
-          card._cloth.style.transform = 'scale(1.08)';
-          setTimeout(function () { measureCloth(config, h, i); }, 460);
-        });
-      });
-
-      var run = Promise.resolve();
-      if (!clothState.introShown) {
-        clothState.introShown = true;
-        run = run.then(function () { return sayGogo(h, s, 'Last of all — the royal cloths!'); })
-                 .then(function () { return sayGogo(h, s, 'Find the cloth that is ' + clothState.target + ' handspans WIDE.'); })
-                 .then(function () { return sayGogo(h, s, 'Pick a cloth to measure.'); });
-      } else {
-        run = run.then(function () { return sayGogo(h, s, 'Pick another cloth to measure.'); });
-      }
-      return run.then(function () { if (document.body.contains(nudge)) { UI.idleNudge(nudge, { onShow: function () { A.playPop(); } }); } });
+    fixedHall(h, clothState, {
+      bg: 'cloth',
+      carouselClass: 'hall-carousel--cloth',
+      glowClass: 'cloth--glow',
+      makeNode: function (art) { return clothImg(art, 52 * art.spans); },   // wider cloth -> more handspans
+      spansOf: function (art) { return art.spans; },
+      onPick: function (i) { measureCloth(config, h, i); }
     });
   }
 
@@ -1581,7 +1536,9 @@ HS.Rounds = (function () {
         var run = Promise.resolve();
         if (opts.showPreview) run = run.then(function () { return FX.wait(300); }).then(function () { return previewMeasure(layer, Math.min(2, spans)); });
         else run = run.then(function () { return FX.wait(150); });
-        run = run.then(function () { instruct(s, 'Guess how many handspans wide the cloth is.'); return FX.wait(200); });
+        // just before play: the ONE instruction panel comes, is read, and
+        // goes away — only then the guess tray appears
+        run = run.then(function () { return instructOnce(s, 'Guess how many handspans wide the cloth is.'); });
         run = run.then(function () { return h.guessPhase({ answer: spans, hintAnswer: opts.showPreview }); });
         run = run.then(function (sel) { if (sel === spans) successScreen(); else wrongScreen(sel); });
         return run;
@@ -1595,7 +1552,7 @@ HS.Rounds = (function () {
         slots.forEach(function (n) { n.style.opacity = '0'; });
         return FX.wait(350)
           .then(function () { return h.measureFly({ slots: slots, unit: HW }); })
-          .then(function () { FX.celebrate(); feedbackPanel(s, 'success', 'Hurray! This cloth is ' + spans + ' handspans wide.'); return h.tapToContinue(); })
+          .then(function () { FX.celebrate(); feedback(s, 'success', 'Hurray! This cloth is ' + spans + ' handspans wide.'); return h.tapToContinue(); })
           .then(function () { opts.onDone(); });
       });
     }
@@ -1608,7 +1565,7 @@ HS.Rounds = (function () {
         slots.forEach(function (n) { n.style.opacity = '0'; });
         return FX.wait(350)
           .then(function () { return h.measureFly({ slots: slots, unit: HW }); })
-          .then(function () { A.playWrong(); feedbackPanel(s, 'wrong', 'Let us try again.'); return h.tapToContinue(); })
+          .then(function () { A.playWrong(); feedback(s, 'wrong', 'Let us try again.'); return h.tapToContinue(); })
           .then(function () { clueScreen(); });
       });
     }
@@ -1617,14 +1574,14 @@ HS.Rounds = (function () {
         var s = h.scene();
         var layer = buildStage(s);
         placeRow(layer, 'solid', null, true);
-        feedbackPanel(s, 'clue', 'Here is a clue. It should look like this.');
+        feedback(s, 'clue', 'Here is a clue. It should look like this.');
         return h.tapToContinue().then(function () { guessScreen(); });
       });
     }
     guessScreen();
   }
 
-  /* ---- the target (9-handspan) cloth is found; Gogo bags it, then END -- */
+  /* ---- the target (8-handspan, blue) cloth is found; Gogo bags it ------ */
   function clothSuccess(config, h) {
     h.setBackground('cloth');
     h.transitionTo(function () {
@@ -1638,7 +1595,7 @@ HS.Rounds = (function () {
       s.appendChild(wrap);
 
       var run = Promise.resolve();
-      run = run.then(function () { FX.celebrate(wrap); return sayGogo(h, s, 'You found it! This cloth is ' + clothState.target + ' handspans wide!'); });
+      run = run.then(function () { FX.celebrate(wrap); return panelSay(h, s, 'You found it! This cloth is ' + clothState.target + ' handspans wide!'); });
       run = run.then(function () { return sackAnim(h, s, wrap); });
       // ... then on to the candle-stand round (3rd flow, measured vertically)
       run = run.then(function () { startCandles(config, h); });
@@ -1676,23 +1633,23 @@ HS.Rounds = (function () {
       hallSuccess(config, h);
     },
     cloth: function (config, h, spans) {
-      clothState = { list: CLOTHS, target: CLOTH_TARGET, measured: [], introShown: true, center: 0 };
+      clothState = { list: CLOTHS, target: CLOTH_TARGET, measured: [], center: 0 };
       for (var i = 0; i < CLOTHS.length; i++) {
         if (CLOTHS[i].spans === spans) { measureCloth(config, h, i); return; }
       }
     },
     clothSuccess: function (config, h) {
-      clothState = { list: CLOTHS, target: CLOTH_TARGET, measured: [0, 1, 2], introShown: true, center: 0 };
+      clothState = { list: CLOTHS, target: CLOTH_TARGET, measured: [0, 1, 2], center: 0 };
       clothSuccess(config, h);
     },
     candles: startCandles,
     candle: function (config, h, spans) {
-      candleState = { spansList: [5, 3, 7], target: 5, measured: [], introShown: true, center: 0 };
-      var idx = candleState.spansList.indexOf(spans);
+      candleState = { list: [3, 6, 5], target: 5, measured: [], center: 0 };
+      var idx = candleState.list.indexOf(spans);
       measureCandle(config, h, idx < 0 ? 0 : idx);
     },
     candleSuccess: function (config, h) {
-      candleState = { spansList: [5, 3, 7], target: 5, measured: [0, 1, 2], introShown: true, center: 0 };
+      candleState = { list: [3, 6, 5], target: 5, measured: [0, 1, 2], center: 0 };
       candleSuccess(config, h);
     },
     end: function (config, h) {

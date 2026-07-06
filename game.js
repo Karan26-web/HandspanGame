@@ -27,8 +27,8 @@ HS.Game = (function () {
     END: 'STATE_END'
   };
 
-  // Round configuration. Tutorial=4, Round1=8, Round2=6 (per the PDF table
-  // and the explicit brief). The final scene asks for the 6-handspan table.
+  // Round configuration. Tutorial=5, Round1=8, Round2=6 (the 6-span target
+  // is measured last, then bagged). The final scene asks for the 6-span table.
   var CONFIG = {
     tutorialSpans: 5,
     round1Spans: 8,
@@ -124,36 +124,25 @@ HS.Game = (function () {
   }
 
   /* ======================================================================
-   * FESTIVE TRANSITION SCREEN  (Santa bag burst — santa-transition.js)
-   * The bag settles, bursts open with gifts + light, wipes the screen, then
-   * uncovers. No text at all (loading meter, kicker and title all off).
-   * `build` runs the instant the flash fully covers the screen (onCovered), so
-   * the scene swap is hidden. Resolves on complete.
+   * FESTIVE TRANSITION SCREEN  (golden-sand vortex — sand-portal.js)
+   * A whirlpool of golden sand spirals in, fully covers the stage, and
+   * spirals back out. `build` runs at the portal's PEAK (screen fully
+   * covered), so the scene swap is hidden. Resolves when the reveal ends.
+   * (`caption` is unused — the portal carries no text.)
    * ====================================================================== */
   function festiveTransition(build, caption) {
-    return new Promise(function (resolve) {
-      if (typeof SantaTransition === 'undefined') {   // graceful fallback
-        if (build) build();
-        resolve();
-        return;
-      }
-      var built = false, done = false;
-      function doBuild() { if (built) return; built = true; if (build) build(); }
-      function finish() { if (done) return; done = true; resolve(); }
-      var fx = new SantaTransition({
-        bagSrc: 'assets/Bag.webp',
-        showLoading: false,           // no loading meter / percent / label
-        mood: 'midnight',
-        accent: '#ffd24a',
-        kicker: '',            // no text on the transition screen
-        title: '',
-        holdDuration: 0.55,
-        burstDuration: 2.2,
-        zIndex: 400
-      });
-      A.playWhoosh();                                   // bag settles in
-      setTimeout(function () { A.playBurst(); }, 560);  // fires as the bag bursts (after holdDuration)
-      fx.play({ onCovered: doBuild, onComplete: finish });
+    if (typeof playSandTransition === 'undefined') {   // graceful fallback
+      if (build) build();
+      return Promise.resolve();
+    }
+    A.playWhoosh();                                     // the sand awakens
+    setTimeout(function () { A.playSparkle(); }, 1150); // shimmer at the covered peak
+    return playSandTransition(function () { if (build) build(); }, {
+      duration: 2.6,
+      spins: 2.6,
+      density: 'regular',
+      zIndex: 400,
+      target: document.getElementById('stage')          // cover the game stage, scale with it
     });
   }
 
@@ -319,16 +308,20 @@ HS.Game = (function () {
     tray.addEventListener('mouseleave', function () { if (!committed) clearHighlight(); });
     s.appendChild(tray);
 
-    // Hand-nudge hints which number to tap. On the guided first flow it sits
-    // right above the correct (glowing) answer cell; otherwise it just invites
-    // a tap from below. A small (70px) cursor that bounces straight down keeps
-    // it locked onto the cell (the larger pop nudge drifted off-target).
+    // Hand-nudge hints which number to tap. On the guided first flow the SMALL
+    // tap cursor presses the correct (glowing) answer cell, its FINGERTIP
+    // anchored dead-centre on the cell (the art's tip sits at 30%/20% of the
+    // image — the same anchor the tap-pop press animation pivots on), so the
+    // pointing is exact; otherwise it just invites a tap from below.
     var nudge = UI.HandNudge();
     if (opts.hintAnswer && cells[answer - 1]) {
       var hostCell = cells[answer - 1].cell;
       hostCell.style.position = 'relative';
       hostCell.classList.add('guess-cell--hint');   // precise pulsing glow on the answer
-      var wrap = el('div', { style: { position: 'absolute', left: '50%', top: '-58px', transform: 'translateX(-50%)', zIndex: '29' } });
+      nudge.classList.add('hand-nudge--tap');       // 45px tap cursor, tip-anchored press
+      // fingertip offset: 45px * 30% ≈ 13px, (45px * 358/254) * 20% ≈ 13px
+      Object.assign(nudge.style, { left: '-13px', top: '-13px' });
+      var wrap = el('div', { style: { position: 'absolute', left: '50%', top: '50%', zIndex: '29' } });
       wrap.appendChild(nudge);
       hostCell.appendChild(wrap);
     } else {
