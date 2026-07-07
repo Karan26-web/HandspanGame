@@ -52,7 +52,8 @@ HS.Tutorial = (function () {
     Object.assign(b.style, bubblePos(pose));
     s.appendChild(b);
     A.playDialogue();
-    return h.tapToContinue().then(function () { b.remove(); });
+    // the arrow waits until the line has been read, then invites the tap
+    return h.tapToContinue(h.readMs(text)).then(function () { b.remove(); });
   }
 
   function start(config, h) {

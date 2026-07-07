@@ -190,6 +190,17 @@ html, body {
   background: linear-gradient(180deg, var(--yellow), var(--orange-1));
   box-shadow: 0 6px 0 #c96f12, var(--shadow-soft);
   display: flex; align-items: center; justify-content: center;
+  /* pops in, then breathes forever to invite the tap */
+  animation: next-pop 0.45s cubic-bezier(.2,1.4,.5,1) both,
+             next-pulse 1.5s ease-in-out 0.6s infinite;
+}
+@keyframes next-pop {
+  from { opacity: 0; transform: scale(0.3); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes next-pulse {
+  0%, 100% { transform: scale(1);    box-shadow: 0 6px 0 #c96f12, var(--shadow-soft); }
+  50%      { transform: scale(1.12); box-shadow: 0 6px 0 #c96f12, 0 0 26px 9px rgba(255, 214, 74, 0.6), var(--shadow-soft); }
 }
 .next-arrow:hover { filter: brightness(1.08); }
 .next-arrow:active { box-shadow: 0 3px 0 #c96f12, var(--shadow-soft); }
@@ -261,8 +272,19 @@ html, body {
 .handspan[data-variant="guide"] .handspan__hand { opacity: 0.5; }
 /* solid: a placed / confirmed handspan */
 .handspan[data-variant="solid"] .handspan__hand { opacity: 1; }
-/* faded impression left behind after a placement */
-.handspan[data-variant="faded"] .handspan__hand { opacity: 0.4; }
+/* faded impression left behind after a placement — a hand-shaped HOLLOW
+   OUTLINE (baked contour sprite, same frame as the hand art): an empty
+   pocket inviting a handspan. Outline only — the fill is hidden. */
+.handspan__rim {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: 162%; height: auto; display: block;
+  /* faint warm shadow lifts the white line off the sandy floor */
+  filter: drop-shadow(0 1px 3px rgba(80, 40, 10, 0.4));
+}
+.handspan--anim .handspan__rim { width: 108%; }
+.handspan--vert .handspan__rim { transform: translate(-50%, -50%) rotate(90deg); }
+.handspan[data-variant="faded"] .handspan__hand { opacity: 0; }
 /* impression used in the wrong-demo */
 .handspan[data-variant="impression"] .handspan__hand { opacity: 0.45; }
 /* a WRONG placement's impression (gap / overlap demo) — tinted red */
@@ -425,7 +447,7 @@ html, body {
    Each genie is lifted (bottom offset) so its head sits just under the bubble. */
 /* 184px renders successGogo's visible height ~300px — same as the gogo-char
    poses, so Gogo doesn't shrink between the round and its success screen */
-.feedback-gogo--success { width: 184px; bottom: 170px; }
+.feedback-gogo--success { width: 184px; bottom: 260px; }
 .feedback-gogo--wrong   { width: 320px; bottom: 205px; }
 .feedback-gogo--clue    { width: 320px; bottom: 200px; }
 
@@ -1003,6 +1025,16 @@ html, body {
   0%   { transform: scaleY(0); opacity: 0; }
   100% { transform: scaleY(1); opacity: 1; }
 }
+/* tutorial call-out: the START line throbs bright while Gogo says the
+   "start from one end" rule (must out-rank .is-in, hence the double class) */
+.measure-guide__line.measure-guide__line--hot {
+  transform: scaleY(1); opacity: 1;
+  animation: guide-hot 0.8s ease-in-out infinite;
+}
+@keyframes guide-hot {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(225, 29, 255, 0.5)); }
+  50%      { filter: drop-shadow(0 0 12px rgba(225, 29, 255, 1)) brightness(1.5); }
+}
 
 /* --- spotlight vignette: darkens periphery, central table/hands pop ------ */
 .tut-vignette {
@@ -1245,14 +1277,27 @@ html, body {
   transform: translateX(-50%) scale(0.85);
 }
 
+/* while Gogo PRESENTS the row (the intro lines), the items huddle to the
+   RIGHT so he has clear space on the left — like the table showcase. The
+   moment the presentation ends these classes drop and the cards GLIDE to
+   their focus slots (one highlighted, the others receding). */
+.hall-carousel--cloth.hall-carousel--present .hall-card { transform: translate(-50%, -50%) scale(0.52); }
+.hall-carousel--cloth.hall-carousel--present .hall-card.is-left   { left: 38%; }
+.hall-carousel--cloth.hall-carousel--present .hall-card.is-center { left: 61%; }
+.hall-carousel--cloth.hall-carousel--present .hall-card.is-right  { left: 84%; }
+.hall-carousel--candle.hall-carousel--present .hall-card { transform: translateX(-50%) scale(0.72); }
+.hall-carousel--candle.hall-carousel--present .hall-card.is-left   { left: 42%; }
+.hall-carousel--candle.hall-carousel--present .hall-card.is-center { left: 64%; }
+.hall-carousel--candle.hall-carousel--present .hall-card.is-right  { left: 86%; }
+
 /* ============================================================================
  * DRAG-TO-MEASURE (table flow)
  * ========================================================================== */
 /* invisible snap targets; a soft glow appears only while dragging over one */
 .drop-zone { pointer-events: none; border-radius: 8px; transition: box-shadow 0.15s ease, background 0.15s ease; }
 .drop-zone--target {
-  background: rgba(255, 213, 74, 0.16);
-  box-shadow: inset 0 0 0 3px rgba(255, 213, 74, 0.9), 0 0 8px rgba(255, 213, 74, 0.4);
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 8px rgba(255, 255, 255, 0.5);
 }
 /* glowing "handspan button" podium (assets/handDrag.svg) under the rest hand:
    the inner light softly brightens and settles — no movement, no halo */
@@ -1274,6 +1319,10 @@ html, body {
   width: 108%; height: auto; display: block;
   filter: drop-shadow(0 8px 10px rgba(80,40,10,0.35));
 }
+/* vertical measuring (candle flow): the hand FLIPS to span HEIGHT the moment
+   it snaps into the measuring column (animated via the img transition) */
+.drag-hand img { transition: transform 0.3s cubic-bezier(.3,1.4,.5,1); }
+.drag-hand--vert img { transform: translate(-50%, -50%) rotate(90deg); }
 .drag-hand--dragging { cursor: grabbing; z-index: 40; }
 .drag-hand--dragging img { filter: drop-shadow(0 16px 18px rgba(0,0,0,0.42)); }
 /* idle hint: gently bob + glow the resting hand */

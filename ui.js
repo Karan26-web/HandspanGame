@@ -85,9 +85,16 @@ HS.UI = (function () {
     wrap.style.width = w + 'px';
     wrap.style.height = h + 'px';
 
-    wrap.appendChild(el('img.handspan__hand', {
-      src: anim ? 'assets/handSpanHand.webp' : 'assets/hand.webp', alt: '', draggable: 'false'
-    }));
+    var src = anim ? 'assets/handSpanHand.webp' : 'assets/hand.webp';
+    // faded impressions render as a hand-shaped HOLLOW OUTLINE (a baked
+    // contour sprite traced from the same art) — an empty pocket a real
+    // handspan can be placed into. No fill: outline only.
+    if (variant === 'faded') {
+      wrap.appendChild(el('img.handspan__rim', {
+        src: anim ? 'assets/handOutlineAnim.png' : 'assets/handOutline.png', alt: '', draggable: 'false'
+      }));
+    }
+    wrap.appendChild(el('img.handspan__hand', { src: src, alt: '', draggable: 'false' }));
 
     if (opts.number != null) {
       wrap.appendChild(el('div.handspan__num', { text: String(opts.number) }));
@@ -136,6 +143,10 @@ HS.UI = (function () {
   // Update an existing handspan's variant + optional number badge in place.
   function setHandSpan(node, variant, number) {
     node.dataset.variant = variant;
+    if (variant !== 'faded') {   // the pocket rim belongs to faded impressions only
+      var rim = node.querySelector('.handspan__rim');
+      if (rim) rim.remove();
+    }
     if (number != null) {
       var badge = node.querySelector('.handspan__num');
       if (!badge) {
@@ -422,6 +433,7 @@ HS.UI = (function () {
     Object.assign(b.style, { left: endX + 'px', top: top + 'px', height: height + 'px' });
     g.appendChild(a); g.appendChild(b);
     g.reveal = function () { a.classList.add('is-in'); b.classList.add('is-in'); };
+    g.startLine = a;   // exposed so the tutorial can spotlight the start rule
     return g;
   }
 

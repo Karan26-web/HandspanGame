@@ -40,9 +40,12 @@
       ['Cloth hall (flow 2)',    function () { R.startCloths(CONFIG, h); }],
       ['Cloth round (8 sp)',     function () { R.debug.cloth(CONFIG, h, 8); }],
       ['Cloth success',          function () { R.debug.clothSuccess(CONFIG, h); }],
-      ['Candle hall (flow 3)',   function () { R.debug.candles(CONFIG, h); }],
-      ['Candle round (5 sp)',    function () { R.debug.candle(CONFIG, h, 5); }],
-      ['Candle success',         function () { R.debug.candleSuccess(CONFIG, h); }],
+      ['Candle hall (flow 3)',   function () { R.debug.pillars(CONFIG, h); }],
+      ['Candle round (3 sp)',    function () { R.debug.pillar(CONFIG, h, 3); }],
+      ['Candle success',         function () { R.debug.pillarSuccess(CONFIG, h); }],
+      ['Stand hall (flow 4)',    function () { R.debug.candles(CONFIG, h); }],
+      ['Stand round (5 sp)',     function () { R.debug.candle(CONFIG, h, 5); }],
+      ['Stand success',          function () { R.debug.candleSuccess(CONFIG, h); }],
       ['End screen',             function () { R.debug.end(CONFIG, h); }],
       ['⟲ Restart game',         function () { G.start(); }]
     ];

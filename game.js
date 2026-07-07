@@ -92,13 +92,17 @@ HS.Game = (function () {
   }
 
   /* ---- standalone tap-to-continue gate (keeps current scene on screen) -- */
-  function tapToContinue() {
+  // reading time for a line of on-screen text (same pacing as auto-advanced
+  // dialogue) — callers pass this to tapToContinue as the arrow's hold-back
+  function readMs(text) { return Math.max(2400, 900 + String(text).split(/\s+/).length * 240); }
+  // `delayMs` holds the arrow (and its tap catcher) back until the scene's
+  // content has actually played out / been read — the button must never pop
+  // in together with the objects it invites the child to move on from.
+  function tapToContinue(delayMs) {
     return new Promise(function (resolve) {
       var s = scene();
       var catcher = el('div.tap-catcher');
       var btn = UI.NextButton();
-      s.appendChild(catcher);
-      s.appendChild(btn);
       var advance = function () {
         A.playClick();
         catcher.remove();
@@ -107,6 +111,10 @@ HS.Game = (function () {
       };
       catcher.addEventListener('click', advance);
       btn.addEventListener('click', advance);
+      setTimeout(function () {
+        s.appendChild(catcher);
+        s.appendChild(btn);
+      }, Math.max(0, delayMs || 0));
     });
   }
 
@@ -465,7 +473,7 @@ HS.Game = (function () {
         var p = UI.WelcomePanel(text);
         s.appendChild(p);
         A.playDialogue();
-        return tapToContinue().then(function () { p.remove(); });
+        return tapToContinue(readMs(text)).then(function () { p.remove(); });
       }
 
       var seq = FX.wait(150);
@@ -491,6 +499,7 @@ HS.Game = (function () {
     festiveTransition: festiveTransition,
     showTitleChip: showTitleChip,
     tapToContinue: tapToContinue,
+    readMs: readMs,
     dialogue: dialogue,
     buildMeasureScene: buildMeasureScene,
     guessPhase: guessPhase,
