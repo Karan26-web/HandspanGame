@@ -469,11 +469,13 @@ HS.Game = (function () {
       Object.assign(genie.style, { left: '362px', top: '78px', width: '520px', zIndex: '10' });
       s.appendChild(genie);
 
+      // no Next button on the welcome screen — the panel holds for its
+      // reading time and the flow moves on by itself
       function welcome(text) {
         var p = UI.WelcomePanel(text);
         s.appendChild(p);
         A.playDialogue();
-        return tapToContinue(readMs(text)).then(function () { p.remove(); });
+        return FX.wait(readMs(text) + 600).then(function () { p.remove(); });
       }
 
       var seq = FX.wait(150);

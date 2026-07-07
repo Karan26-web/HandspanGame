@@ -37,17 +37,28 @@ HS.Rounds = (function () {
 
   /* ---- ONE instruction panel for the guess flows (cloth + candle) --------
    * Gogo IN PERSON is reserved for the table flow (flow 1). In every other
-   * flow the round plays out on its own, and JUST BEFORE play a single
-   * instruction panel (avatar + purple bar) comes in with the task text,
-   * is read, and goes away by itself. */
-  function instructOnce(s, text) {
+   * flow the round plays out on its own, and JUST BEFORE play an instruction
+   * panel (avatar + purple bar) comes in with the task text and STAYS on
+   * screen for the whole guess phase — it is the task the child keeps
+   * referring to while picking a number. Resolves once the line has been
+   * read (so the guess tray can then appear); the panel itself lives until
+   * the scene moves on. */
+  function instructStay(s, text) {
     var b = UI.TutorialBubble({ who: 'gogo', text: text });
     Object.assign(b.style, { left: '50%', top: '18px', transform: 'translateX(-50%)' });
     s.appendChild(b);
     A.playDialogue();
-    return FX.wait(lineMs(text)).then(function () {
-      b.style.transition = 'opacity 0.3s ease'; b.style.opacity = '0';
-      return FX.wait(300).then(function () { b.remove(); });
+    // resolves with the panel node — drag flows clear it when measuring ends
+    // (guess flows just leave it; the scene transition takes it away)
+    return FX.wait(lineMs(text)).then(function () { return b; });
+  }
+  /* later guess rounds: the demo's outline track lingers briefly, then fades
+   * away — the child answers from memory (only the FIRST cloth / stand keeps
+   * its outlines up for counting) */
+  function fadeImpressions(imps) {
+    return FX.wait(2000).then(function () {
+      imps.forEach(function (n) { n.style.transition = 'opacity 0.5s ease'; n.style.opacity = '0'; });
+      return FX.wait(520).then(function () { imps.forEach(function (n) { n.remove(); }); });
     });
   }
   /* same panel, but held on screen until a tap (success recaps) */
@@ -513,8 +524,9 @@ HS.Rounds = (function () {
         // -> Gogo + text -> handspan) — the guide reveal is always deferred
         // to the sequence (runTutorial / beginRound)
         var layer = buildStage(s, null, true);
-        // no standing instruction panel — Gogo himself delivers the line in
-        // both modes (see runTutorial / beginRound), then steps aside
+        // the standing task panel: the tutorial is Gogo-led (he speaks in
+        // person), but the normal rounds pin "Find out how long the table is."
+        // here for the whole measure (see beginRound / finishMeasure)
         var bubble = null;
 
         var stageEl = document.getElementById('stage');
@@ -905,6 +917,7 @@ HS.Rounds = (function () {
           seq = seq.then(function () { hand1 = demoHand(false); A.playWhoosh(); glidePointGogo(MID_CX, 1300); return moveArc(hand1, MID, HAND_TOP, 1300); });
           seq = seq.then(function () { return FX.wait(500); });
           seq = seq.then(function () { return demoLine('Can we keep it here?', 3000, null, pointBubbleAt(MID_CX)); });
+          seq = seq.then(function () { return FX.wait(700); });    // slight pause: let the question land before the answer
           seq = seq.then(function () { return noHere(MID_CX); });
           seq = seq.then(function () { return FX.wait(1800); });
           seq = seq.then(function () { A.playWhoosh(); glidePointGogo(LEFT_CX, 950); return moveTo(hand1, LEFTSIDE, HAND_TOP, 950); });
@@ -923,17 +936,30 @@ HS.Rounds = (function () {
           // (ON_CX === TRACK_X0), so Gogo is ALREADY there, finger on the
           // handspan; he says the rule without moving at all. The START line
           // throbs bright for the whole rule + slide so "one end" is SEEN.
-          seq = seq.then(function () { layer.pulseStart(true); return demoLine('We must start from one end of the table.', 3400, null, pointBubbleAt(TRACK_X0)); });
-          // ...and only THEN the straddling hand slides to the correct spot,
-          // landing right under his pointing finger
-          seq = seq.then(function () { return FX.wait(500); });
+          // The rule bubble STAYS UP through the slide — the words and the
+          // move are read together — and only comes down once the hand lands.
+          var startRuleBubble;
+          seq = seq.then(function () {
+            layer.pulseStart(true);
+            startRuleBubble = UI.SayBubble('We must start from one end of the table.', 'left');
+            Object.assign(startRuleBubble.style, pointBubbleAt(TRACK_X0));
+            s.appendChild(startRuleBubble);
+            A.playDialogue();
+            return FX.wait(Math.max(3400, lineMs('We must start from one end of the table.')));
+          });
+          // ...the straddling hand slides to the correct spot, landing right
+          // under his pointing finger — no follow-up "Yes!" line: the slide
+          // itself is the answer
           seq = seq.then(function () { A.playWhoosh(); return moveTo(hand1, L0, HAND_TOP, 850); });
           seq = seq.then(function () { return FX.wait(600); });
-          seq = seq.then(function () { layer.pulseStart(false); return gogoHome('talk'); });
-          seq = seq.then(function () { lockDemoHand(hand1, 0); return demoLine('Yes! Start right at the line.', 3200, 'talk'); });
+          seq = seq.then(function () {
+            if (startRuleBubble) { startRuleBubble.remove(); startRuleBubble = null; }
+            layer.pulseStart(false);
+            return gogoHome('talk');
+          });
           // checkpoint: the start rule is complete — the pulsing Next button
           // appears and the SECOND handspan's lesson waits for the tap
-          seq = seq.then(function () { return h.tapToContinue(300); });
+          seq = seq.then(function () { lockDemoHand(hand1, 0); return h.tapToContinue(300); });
 
           // (3) HAND 2 — overlap, then gap, then flush (the "no gaps, no overlaps" rule)
           // Same pattern as hand 1: Gogo flies down beside the podium, says his
@@ -996,27 +1022,18 @@ HS.Rounds = (function () {
           return seq;
         }
 
-        // non-tutorial rounds: SAME staged reveal as the tutorial — the table
-        // alone, then the guide lines, then Gogo + his line, then the handspan
+        // non-tutorial rounds: staged reveal — the table alone, then the guide
+        // lines, then the TASK PANEL ("Find out...") which STAYS up for the
+        // whole measure (cleared in finishMeasure), then the handspan
         function beginRound() {
-          teacher = UI.GogoCharacter('talk');
-          Object.assign(teacher.style, { left: GOGO_SPOT.left, top: GOGO_SPOT.top, visibility: 'hidden' });
-          s.appendChild(teacher);
           var seq = FX.wait(1000);                                  // 1. the table alone
           seq = seq.then(function () {
             layer.revealGuide();                                    // 2. lines drop in (SFX)
             return FX.wait(1100);
           });
-          seq = seq.then(function () {                              // 3. Gogo poofs in...
-            UI.gogoAppear(teacher);
-            return FX.wait(800);
+          seq = seq.then(function () {                              // 3. the standing task panel
+            return instructStay(s, 'Find out how long the table is.').then(function (p) { bubble = p; });
           });
-          seq = seq.then(function () { return demoLine('Find out how long the table is.', 2600, 'talk'); });
-          seq = seq.then(function () {
-            var tg = teacher; teacher = null;
-            return UI.gogoVanish(tg).then(function () { tg.remove(); });
-          });
-          seq = seq.then(function () { return FX.wait(350); });     // beat before the hand + nudge
           seq = seq.then(function () {                              // 4. the handspan appears
             podium.style.display = '';
             A.playPop();
@@ -1341,7 +1358,9 @@ HS.Rounds = (function () {
       blurIntro: true,
       glowClass: 'candle--glow',
       introLines: ['Here are the candles.', "Let's measure how tall each candle is."],
-      makeNode: function (spans) { return pillarImg(44 * spans); },   // taller candle -> more handspans
+      makeNode: function (spans) { return pillarImg(70 * spans); },   // taller candle -> more handspans
+                                                                      // (unit sized so even the SHORTEST candle's top clears
+                                                                      // the room's wall-floor edge from the shared base line)
       spansOf: function (spans) { return spans; },
       onPick: function (i) { measurePillar(config, h, i); }
     });
@@ -1553,8 +1572,12 @@ HS.Rounds = (function () {
         setTimeout(function () { clone.remove(); }, 220);
         armIdle();
       }
+      var taskPanel = null;   // the standing "Find out..." panel (up for the whole measure)
       function finish() {
         alive = false; stopIdle();
+        // the standing task panel has served its purpose — clear it so it
+        // doesn't collide with Gogo's success panel
+        if (taskPanel) { taskPanel.remove(); taskPanel = null; }
         if (curHand) { curHand.remove(); curHand = null; }
         podium.remove();
         FX.celebrate();
@@ -1563,7 +1586,7 @@ HS.Rounds = (function () {
       }
 
       // staged entrance (matches the table rounds): the candle alone, then
-      // the guide lines, then Gogo + his line, then the handspan
+      // the guide lines, then the standing task panel, then the handspan
       FX.wait(1000)
         .then(function () {
           g.reveal();
@@ -1572,8 +1595,7 @@ HS.Rounds = (function () {
           FX.sparkleBurst(CX + BODY_HALF + 24, BASE_Y, { count: 6, spread: 40, color: '#e11dff' });
           return FX.wait(1100);
         })
-        .then(function () { return gogoSay(s, ['Find out how tall the candle is.']); })
-        .then(function () { return FX.wait(350); })
+        .then(function () { return instructStay(s, 'Find out how tall the candle is.').then(function (p) { taskPanel = p; }); })
         .then(function () {
           if (!alive) return;
           podium.style.display = '';
@@ -1647,7 +1669,9 @@ HS.Rounds = (function () {
       blurIntro: true,   // first entry: blurred room -> focus move (like the table showcase)
       glowClass: 'candle--glow',
       introLines: ['Here are the candle stands.', "Let's measure how tall each candle stand is."],
-      makeNode: function (spans) { return candleImg(30 * spans); },   // taller stand -> more handspans
+      makeNode: function (spans) { return candleImg(48 * spans); },   // taller stand -> more handspans
+                                                                      // (unit keeps every stand's rim above the wall-floor edge,
+                                                                      // and the SMALLEST 3-span stand still clearly readable)
       spansOf: function (spans) { return spans; },
       onPick: function (i) { measureCandle(config, h, i); }
     });
@@ -1656,6 +1680,7 @@ HS.Rounds = (function () {
   function measureCandle(config, h, index) {
     playCandleRound(config, h, {
       spans: candleState.list[index],
+      firstFlow: candleState.measured.length === 0,   // guided first stand: outlines stay
       onDone: function () {
         candleState.measured.push(index);
         if (candleState.measured.length >= candleState.list.length) candleSuccess(config, h);
@@ -1666,7 +1691,7 @@ HS.Rounds = (function () {
 
   /* ---- one vertical measure cycle (guess height -> verify) ------------- */
   function playCandleRound(config, h, opts) {
-    h.setBackground('play');
+    h.setBackground('cloth');   // the stand GAMEPLAY plays in the Bgm2 room
     var spans = opts.spans;
     var HV = 58;                 // vertical hand unit
     var CX = 640;                // horizontal centre — EVERY stand's base is centred
@@ -1682,6 +1707,10 @@ HS.Rounds = (function () {
     var STACK_LEFT = CX - BASE_HALF - 12 - HV;        // hand-box left, just left of the base
 
     function buildStage(s, deferGuide) {
+      // soft-focus the room for the whole round so the stand, the guide lines
+      // and the hand column are the clear subject (lifted again on the way
+      // back to the hall — see successScreen)
+      document.getElementById('bg').classList.add('tut-blur');
       s.appendChild(UI.Vignette());
       var topY = BASE_Y - visH;
       var wrap = candleImg(visH);
@@ -1720,18 +1749,66 @@ HS.Rounds = (function () {
       return nodes;
     }
 
-    function guessScreen() {
+    // Intro demo (every stand's FIRST guess): the cloth preview rotated 90° —
+    // the hand climbs the stand base-to-rim, leaving a hand outline behind at
+    // each step. Resolves with the outline nodes so the caller decides their
+    // fate (first stand: they stay for counting; later stands: they fade).
+    function previewMeasureV(layer, count) {
+      return new Promise(function (resolve) {
+        var imps = [];
+        var hand = UI.MeasureHand(HV);
+        hand.classList.add('measure-hand--vert');
+        Object.assign(hand.style, {
+          left: STACK_LEFT + 'px', top: (BASE_Y - HV) + 'px', opacity: '0', zIndex: '24',
+          transition: 'top 0.3s cubic-bezier(.4,.02,.3,1), opacity 0.2s ease'
+        });
+        layer.appendChild(hand);
+        A.playWhoosh();
+        requestAnimationFrame(function () { hand.style.opacity = '1'; });
+        var i = 0;
+        function step() {
+          var teaching = i < 2;
+          UI.playMeasureHand(hand, 1).then(function () {
+            A.playPop();
+            FX.sparkleBurst(STACK_LEFT + HV / 2, BASE_Y - i * HV - HV / 2, { count: 6, spread: 46, color: '#bfe39a' });
+            var imp = UI.HandSpan({ variant: 'faded', w: HV, h: HV, anim: true });
+            imp.classList.add('handspan--vert');
+            Object.assign(imp.style, { position: 'absolute', left: STACK_LEFT + 'px', top: (BASE_Y - (i + 1) * HV) + 'px' });
+            layer.appendChild(imp);
+            imps.push(imp);
+            i++;
+            if (i >= count) { setTimeout(function () { hand.style.opacity = '0'; setTimeout(function () { hand.remove(); resolve(imps); }, 240); }, 220); return; }
+            hand.style.top = (BASE_Y - (i + 1) * HV) + 'px';
+            setTimeout(step, teaching ? 320 : 180);
+          });
+        }
+        setTimeout(step, 380);
+      });
+    }
+
+    function guessScreen(retry) {
       h.transitionTo(function () {
         var s = h.scene();
         var layer = buildStage(s, true);
-        // staged entrance: the stand alone, then the guide lines draw in.
-        // just before play: the ONE instruction panel comes, is read, and
-        // goes away — only then the guess tray appears
-        return FX.wait(1000)
-          .then(function () { layer.revealGuide(); return FX.wait(1100); })
-          .then(function () { return instructOnce(s, 'Guess how many handspans tall the candle stand is.'); })
-          .then(function () { return h.guessPhase({ answer: spans }); })
-          .then(function (sel) { if (sel === spans) successScreen(); else wrongScreen(sel); });
+        // staged entrance: the stand alone, then the guide lines draw in,
+        // then the demo hand measures the WHOLE stand leaving outlines —
+        // but only on the round's first guess: after a wrong answer + clue
+        // the child comes straight back to the panel + tray, no replay
+        var run = FX.wait(1000)
+          .then(function () { layer.revealGuide(); return FX.wait(1100); });
+        if (!retry) {
+          run = run.then(function () { return previewMeasureV(layer, spans); });
+          run = run.then(function (imps) {
+            if (opts.firstFlow) return;          // 1st stand: outlines stay up for counting
+            return fadeImpressions(imps);        // later stands: guess from memory
+          });
+        }
+        // the instruction panel comes in and STAYS for the whole guess —
+        // the tray appears once the line has been read
+        run = run.then(function () { return instructStay(s, 'Guess how many handspans tall the candle stand is.'); });
+        run = run.then(function () { return h.guessPhase({ answer: spans }); });
+        run = run.then(function (sel) { if (sel === spans) successScreen(); else wrongScreen(sel); });
+        return run;
       });
     }
     function successScreen() {
@@ -1743,7 +1820,7 @@ HS.Rounds = (function () {
         return FX.wait(350)
           .then(function () { return h.measureFly({ slots: slots, unit: HV }); })
           .then(function () { FX.celebrate(); return h.tapToContinue(feedback(s, 'success', 'Hurray! This stand is ' + spans + ' handspans tall.')); })
-          .then(function () { opts.onDone(); });
+          .then(function () { document.getElementById('bg').classList.remove('tut-blur'); opts.onDone(); });
       });
     }
     function wrongScreen(guess) {
@@ -1764,8 +1841,8 @@ HS.Rounds = (function () {
         var s = h.scene();
         var layer = buildStage(s);
         placeStack(layer, 'solid', null, true);
-        var readWait = feedback(s, 'clue', 'Here is a clue. It should look like this.');
-        return h.tapToContinue(readWait).then(function () { guessScreen(); });
+        var readWait = feedback(s, 'clue', 'Here is a clue.');
+        return h.tapToContinue(readWait).then(function () { guessScreen(true); });
       });
     }
     guessScreen();
@@ -1841,7 +1918,7 @@ HS.Rounds = (function () {
     playClothRound(config, h, {
       art: art,
       spans: art.spans,
-      showPreview: clothState.measured.length === 0,   // demo on the first cloth
+      showPreview: clothState.measured.length === 0,   // guided first cloth: outlines stay + answer hint
       onDone: function () {
         clothState.measured.push(index);
         if (clothState.measured.length >= clothState.list.length) clothSuccess(config, h);
@@ -1899,14 +1976,16 @@ HS.Rounds = (function () {
       return nodes;
     }
 
-    // Intro demo (first cloth ONLY): the hand measures the WHOLE cloth,
-    // edge to edge — each stretch leaves a faded impression behind as the
-    // hand moves on, so when the demo ends the full faded track stays on
-    // screen next to the guess tray (same lesson as the first hall table).
+    // Intro demo (every cloth's FIRST guess): the hand measures the WHOLE
+    // cloth, edge to edge — each stretch leaves a hand outline behind as the
+    // hand moves on. Resolves with the outline nodes so the caller decides
+    // their fate: the first cloth keeps them up for counting, later cloths
+    // fade them away so the child answers from memory.
     // Every span plays the full stretch at natural speed (a rushed stretch is
     // unreadable); only the hop between slots tightens after the first two.
     function previewMeasure(layer, count) {
       return new Promise(function (resolve) {
+        var imps = [];
         var hand = UI.MeasureHand(HW);
         Object.assign(hand.style, {
           left: TRACK_X0 + 'px', top: HAND_TOP + 'px', opacity: '0', zIndex: '24',
@@ -1924,8 +2003,9 @@ HS.Rounds = (function () {
             var imp = UI.HandSpan({ variant: 'faded', w: HW, h: HW, anim: true });
             Object.assign(imp.style, { position: 'absolute', left: (TRACK_X0 + i * HW) + 'px', top: HAND_TOP + 'px' });
             layer.appendChild(imp);
+            imps.push(imp);
             i++;
-            if (i >= count) { setTimeout(function () { hand.style.opacity = '0'; setTimeout(function () { hand.remove(); resolve(); }, 240); }, 220); return; }
+            if (i >= count) { setTimeout(function () { hand.style.opacity = '0'; setTimeout(function () { hand.remove(); resolve(imps); }, 240); }, 220); return; }
             hand.style.left = (TRACK_X0 + i * HW) + 'px';
             setTimeout(step, teaching ? 320 : 180);
           });
@@ -1934,21 +2014,26 @@ HS.Rounds = (function () {
       });
     }
 
-    function guessScreen() {
+    function guessScreen(retry) {
       h.transitionTo(function () {
         var s = h.scene();
         var layer = buildStage(s, true);
         // staged entrance: the cloth alone, then the guide lines drop in
         var run = FX.wait(1000);
         run = run.then(function () { layer.revealGuide(); return FX.wait(1100); });
-        // tutorial (first cloth): the demo sweeps the FULL width and its faded
-        // track stays up alongside the guess tray, so the child can count.
-        // every later cloth: a short reminder — the hand starts at the edge
-        // and STOPS at the second spot, then the "Guess..." panel comes.
-        run = run.then(function () { return previewMeasure(layer, opts.showPreview ? spans : Math.min(2, spans)); });
-        // just before play: the ONE instruction panel comes, is read, and
-        // goes away — only then the guess tray appears
-        run = run.then(function () { return instructOnce(s, 'Guess how long the tablecloth is.'); });
+        // the demo sweeps the FULL width leaving outlines behind — but only
+        // on the round's first guess: after a wrong answer + clue the child
+        // comes straight back to the panel + tray, no replay
+        if (!retry) {
+          run = run.then(function () { return previewMeasure(layer, spans); });
+          run = run.then(function (imps) {
+            if (opts.showPreview) return;        // 1st cloth: outlines stay up for counting
+            return fadeImpressions(imps);        // later cloths: guess from memory
+          });
+        }
+        // the instruction panel comes in and STAYS for the whole guess —
+        // the tray appears once the line has been read
+        run = run.then(function () { return instructStay(s, 'Guess how long the tablecloth is.'); });
         run = run.then(function () { return h.guessPhase({ answer: spans, hintAnswer: opts.showPreview }); });
         run = run.then(function (sel) { if (sel === spans) successScreen(); else wrongScreen(sel); });
         return run;
@@ -1984,8 +2069,8 @@ HS.Rounds = (function () {
         var s = h.scene();
         var layer = buildStage(s);
         placeRow(layer, 'solid', null, true);
-        var readWait = feedback(s, 'clue', 'Here is a clue. It should look like this.');
-        return h.tapToContinue(readWait).then(function () { guessScreen(); });
+        var readWait = feedback(s, 'clue', 'Here is a clue.');
+        return h.tapToContinue(readWait).then(function () { guessScreen(true); });
       });
     }
     guessScreen();

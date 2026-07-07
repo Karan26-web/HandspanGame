@@ -369,6 +369,29 @@ HS.UI = (function () {
   }
   function UI_clearNode(n) { while (n.firstChild) n.removeChild(n.firstChild); }
 
+  // text-wrap: balance evens a bubble's lines out, but the BOX keeps its
+  // pre-balance width — so a two-line bubble can sit with dead space either
+  // side of its text. Once the bubble is in the DOM, shrink it to hug its
+  // longest rendered line. offsetLeft/offsetTop/offsetWidth are LAYOUT values,
+  // immune to the pop-in scale transforms on the bubble and the .word-in
+  // spans (client rects are NOT safe here for exactly that reason).
+  function snugBubble(b, textEl) {
+    requestAnimationFrame(function () {
+      if (!b.isConnected) return;                       // caller never appended it
+      var words = textEl.children, rows = {}, maxLine = 0, k;
+      for (var i = 0; i < words.length; i++) {
+        var w = words[i], row = rows[w.offsetTop] || (rows[w.offsetTop] = { l: Infinity, r: -Infinity });
+        row.l = Math.min(row.l, w.offsetLeft);
+        row.r = Math.max(row.r, w.offsetLeft + w.offsetWidth);
+      }
+      for (k in rows) maxLine = Math.max(maxLine, rows[k].r - rows[k].l);
+      if (!maxLine) return;
+      // bubble chrome (padding + border) = box width minus the text block
+      var snug = Math.ceil(maxLine + b.offsetWidth - textEl.offsetWidth) + 1;
+      if (snug < b.offsetWidth) b.style.width = snug + 'px';
+    });
+  }
+
   function TutorialBubble(opts) {
     opts = opts || {};
     var avatarSrc = opts.who === 'child' ? 'assets/avatar_tara.webp' : 'assets/avatar_gogo.webp';
@@ -396,10 +419,10 @@ HS.UI = (function () {
   // the genie, so it reads as the genie speaking.
   function FeedbackBubble(text, side) {
     var cls = 'div.fb-bubble ' + (side === 'right' ? 'fb-bubble--right' : 'fb-bubble--left');
-    return el(cls, null, [
-      fillWords(el('div.fb-bubble__text'), text),
-      el('div.fb-bubble__tail')
-    ]);
+    var txt = fillWords(el('div.fb-bubble__text'), text);
+    var b = el(cls, null, [txt, el('div.fb-bubble__tail')]);
+    snugBubble(b, txt);
+    return b;
   }
 
   // One orange hand (the handspan unit AND the draggable cursor share art).
@@ -526,7 +549,9 @@ HS.UI = (function () {
   function SayBubble(text, tail) {
     var kind = tail || 'down-right';
     var b = el('div.say-bubble say-bubble--' + kind);
-    b.appendChild(fillWords(el('div.say-bubble__text'), text));
+    var txt = fillWords(el('div.say-bubble__text'), text);
+    b.appendChild(txt);
+    snugBubble(b, txt);
     var t = el('div.say-bubble__tail');
     if (kind === 'left' || kind === 'right') {
       // the exact Figma DialogueBox tail (swoosh + seam patch) as inline SVG —

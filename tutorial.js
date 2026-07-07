@@ -52,8 +52,9 @@ HS.Tutorial = (function () {
     Object.assign(b.style, bubblePos(pose));
     s.appendChild(b);
     A.playDialogue();
-    // the arrow waits until the line has been read, then invites the tap
-    return h.tapToContinue(h.readMs(text)).then(function () { b.remove(); });
+    // no Next button here — the line holds for its reading time, then the
+    // flow moves on by itself
+    return FX.wait(h.readMs(text) + 600).then(function () { b.remove(); });
   }
 
   function start(config, h) {
