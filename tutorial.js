@@ -41,7 +41,7 @@ HS.Tutorial = (function () {
   function bubblePos(pose) {
     // hugging the head: BOTTOM-anchored so the tail tip lands right beside
     // Gogo's ear whatever the line length (the bubble grows upward)
-    if (pose === 'horizontal') return { left: '648px', bottom: '650px' };
+    if (pose === 'horizontal') return { left: '620px', bottom: '610px' };
     if (pose === 'show') return { left: '195px', bottom: '500px' };
     return { left: '560px', bottom: '640px' };
   }

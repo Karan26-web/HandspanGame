@@ -98,6 +98,35 @@ html, body {
 .bg.bg--single { background-image: url("assets/BgmSingle.webp"); }
 
 /* ============================================================================
+ * LANDSCAPE-ONLY GATE — in portrait (any taller-than-wide viewport) a full
+ * cover asks the player to turn the device; the game shows only in landscape.
+ * Sits ABOVE the boot gate (z 300 > 200) so it wins even on the title screen.
+ * ========================================================================== */
+.rotate-gate {
+  position: fixed; inset: 0; z-index: 300;
+  display: none;
+  align-items: center; justify-content: center;
+  text-align: center;
+  background: radial-gradient(120% 120% at 50% 0%, #2a1840 0%, #160d28 55%, #0c0717 100%);
+}
+@media (orientation: portrait) {
+  .rotate-gate { display: flex; }
+}
+/* a little phone that tips over to landscape, on repeat */
+.rotate-gate__phone {
+  width: 56px; height: 96px;
+  margin: 0 auto 26px;
+  border: 5px solid #ffd54a; border-radius: 12px;
+  animation: rotate-hint 2s ease-in-out infinite;
+}
+@keyframes rotate-hint {
+  0%, 25%   { transform: rotate(0deg); }
+  55%, 100% { transform: rotate(90deg); }
+}
+.rotate-gate__title { color: #fff; font-weight: 800; font-size: 30px; margin-bottom: 8px; }
+.rotate-gate__sub   { color: #b9a5e8; font-weight: 600; font-size: 18px; }
+
+/* ============================================================================
  * BOOT / TAP TO PLAY
  * ========================================================================== */
 .boot {
@@ -401,23 +430,10 @@ html, body {
 }
 .hall-card.is-left  { z-index: 2; left: 12%; transform: translateX(-50%) translateY(-36px) scale(0.62); }
 .hall-card.is-right { z-index: 3; left: 88%; transform: translateX(-50%) translateY(-36px) scale(0.62); }
-/* side tables lift toward the player on hover so they read as interactive */
-.hall-card.is-left:not(.hall-card--done):hover,
-.hall-card.is-right:not(.hall-card--done):hover {
-  opacity: 0.9; filter: blur(0.5px) brightness(0.9) saturate(0.9);
-  transform: translateX(-50%) translateY(-36px) scale(0.68);
-}
-
 /* fixed-sequence hall (flow 1): side tables are never selectable, so they
-   don't invite interaction — no pointer cursor, no hover lift */
+   don't invite interaction — no pointer cursor */
 .hall-carousel--fixed .hall-card { cursor: default; }
 .hall-carousel--fixed .hall-card.is-center:not(.hall-card--done) { cursor: pointer; }
-.hall-carousel--fixed .hall-card.is-left:hover,
-.hall-carousel--fixed .hall-card.is-right:hover {
-  opacity: 0.62;
-  filter: blur(2px) brightness(0.7) saturate(0.8) grayscale(0.1);
-  transform: translateX(-50%) translateY(-36px) scale(0.62);
-}
 /* entrance recap: the just-measured card holds the spotlight, bright (not
    greyed like a normal done card) so its "N handspans" chip reads clearly */
 .hall-card--done.hall-card--recap.is-center { filter: brightness(1.05); animation: none; }
@@ -435,6 +451,31 @@ html, body {
   padding: 6px 18px; border-radius: 12px; white-space: nowrap;
   box-shadow: var(--shadow-soft);
 }
+
+/* ---- finale line-up (success-bag screen): all measured objects in a row,
+   the target then takes the light while the others step back ------------- */
+.finale-card {
+  position: absolute; z-index: 5;
+  transform-origin: center bottom;   /* the winner grows UP from the floor */
+  transition: filter 0.9s ease, opacity 0.9s ease, transform 0.9s cubic-bezier(.3,1.15,.4,1);
+}
+.finale-card--dim { filter: grayscale(0.8) brightness(0.55); opacity: 0.8; }
+.finale-card--hero { z-index: 8; transform: scale(1.14); }
+/* light cone falling from ABOVE onto the winning table at the reveal —
+   sits under the cards (z 4 < card 5/8) so the table is lit, not veiled */
+.finale-beam {
+  position: absolute; top: -20px; z-index: 4; pointer-events: none;
+  transform: translateX(-50%);
+  background: linear-gradient(to bottom,
+    rgba(255,241,192,0.78) 0%,
+    rgba(255,234,168,0.42) 40%,
+    rgba(255,228,152,0.16) 70%,
+    transparent 94%);
+  clip-path: polygon(40% 0%, 60% 0%, 96% 100%, 4% 100%);
+  filter: blur(12px);
+  opacity: 0; transition: opacity 0.7s ease;
+}
+.finale-beam.is-on { opacity: 1; animation: spot-breathe 3.8s ease-in-out 0.9s infinite; }
 
 /* full-body genie on the feedback screens (success / wrong / clue) */
 .feedback-gogo {
@@ -455,6 +496,9 @@ html, body {
 
 /* numbered circle under a measured handspan (clue / success) — same Figma
    "ellipse" token as the tray numbers: purple gradient disc in a yellow ring */
+/* --pop: the clue screens COUNT the hands — each circle pops in on its own
+   beat (stagger via inline animation-delay), reusing the badge-pop keyframes */
+.track-num--pop { animation: badge-pop 0.35s cubic-bezier(.2,1.5,.5,1) both; }
 .track-num {
   min-width: 36px; height: 36px; padding: 0 5px;
   display: flex; align-items: center; justify-content: center;
@@ -727,8 +771,6 @@ html, body {
   display: flex; gap: 8px; z-index: 20; padding: 10px;
 }
 .guess-cell { cursor: pointer; transition: transform 0.15s ease; }
-.guess-cell:hover { transform: translateY(-6px) scale(1.05); }
-.guess-cell[data-selected="1"] { transform: translateY(-4px); }
 /* cells in the hovered run 1..N lift together as a group */
 .guess-cell--lit { transform: translateY(-6px); }
 .guess-cell--lit .handspan__hand { filter: drop-shadow(0 4px 6px rgba(80,40,10,0.3)) drop-shadow(0 0 8px rgba(255,213,74,0.7)); }
@@ -772,7 +814,6 @@ html, body {
   z-index: 12;
 }
 .select-table { position: relative; cursor: pointer; transition: transform 0.2s ease, filter 0.2s ease; }
-.select-table:hover { transform: translateY(-10px) scale(1.04); filter: brightness(1.04); }
 .select-table .marker-strip {
   position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%);
   display: flex;
@@ -1119,6 +1160,19 @@ html, body {
   100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(200deg) scale(0.15); }
 }
 
+/* green genie-smoke puff (character vanish) — a blurred soft disc that
+   billows outward, drifts up and thins away */
+.p-smoke {
+  position: absolute; border-radius: 50%;
+  pointer-events: none;
+  filter: blur(5px);
+  animation: smoke-fly ease-out forwards;
+}
+@keyframes smoke-fly {
+  0%   { opacity: 0.9; transform: translate(-50%, -50%) scale(0.35); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.7); }
+}
+
 .p-ring {
   position: absolute; width: 20px; height: 20px; border-radius: 50%;
   border: 4px solid #FFD54A; transform: translate(-50%,-50%);
@@ -1206,19 +1260,30 @@ html, body {
 }
 
 .candle { position: relative; }
+/* contact shadow pinned to the wrapper's bottom edge (== the candle's visible
+   base — both candle arts are bottom-cropped to it), so the candle reads as
+   STANDING on the floor in every state, including the glowing carousel pick */
+.candle::after {
+  content: ''; position: absolute; left: 50%; bottom: -6px;
+  width: 34%; height: 14px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse closest-side, rgba(60, 30, 5, 0.35), rgba(60, 30, 5, 0) 80%);
+  pointer-events: none;
+}
 .candle__img {
   width: 100%; height: 100%; display: block;
   filter: drop-shadow(0 14px 16px rgba(60,30,10,0.30));
   pointer-events: none;
 }
-/* centred, still-measurable candle glows in the carousel */
+/* centred, still-measurable candle glows in the carousel — the glow is ADDED
+   on top of the grounding drop-shadow (replacing it made the candle float) */
 .candle--glow .candle__img {
-  filter: drop-shadow(0 0 16px rgba(255,213,74,0.95)) drop-shadow(0 0 34px rgba(255,213,74,0.6));
+  filter: drop-shadow(0 14px 16px rgba(60,30,10,0.30)) drop-shadow(0 0 16px rgba(255,213,74,0.95)) drop-shadow(0 0 34px rgba(255,213,74,0.6));
   animation: candle-glow-pulse 1.6s ease-in-out infinite;
 }
 @keyframes candle-glow-pulse {
-  0%,100% { filter: drop-shadow(0 0 12px rgba(255,213,74,0.8)) drop-shadow(0 0 24px rgba(255,213,74,0.45)); }
-  50%     { filter: drop-shadow(0 0 20px rgba(255,213,74,1)) drop-shadow(0 0 40px rgba(255,213,74,0.7)); }
+  0%,100% { filter: drop-shadow(0 14px 16px rgba(60,30,10,0.30)) drop-shadow(0 0 12px rgba(255,213,74,0.8)) drop-shadow(0 0 24px rgba(255,213,74,0.45)); }
+  50%     { filter: drop-shadow(0 14px 16px rgba(60,30,10,0.30)) drop-shadow(0 0 20px rgba(255,213,74,1)) drop-shadow(0 0 40px rgba(255,213,74,0.7)); }
 }
 
 /* ============================================================================
@@ -1257,14 +1322,6 @@ html, body {
 .hall-carousel--cloth .hall-card.is-center { transform: translate(-50%, -50%) scale(1); }
 .hall-carousel--cloth .hall-card.is-left,
 .hall-carousel--cloth .hall-card.is-right  { transform: translate(-50%, -50%) scale(0.5); }
-/* keep the vertical centring on hover too, so a side cloth lifts in place
-   instead of dropping down (the base hover uses translateX only) */
-.hall-carousel--cloth .hall-card.is-left:not(.hall-card--done):hover,
-.hall-carousel--cloth .hall-card.is-right:not(.hall-card--done):hover { transform: translate(-50%, -50%) scale(0.57); }
-/* fixed-sequence cloth showcase: side cloths are never selectable, so no
-   hover lift at all (mirrors the fixed Hall of Tables) */
-.hall-carousel--fixed.hall-carousel--cloth .hall-card.is-left:hover,
-.hall-carousel--fixed.hall-carousel--cloth .hall-card.is-right:hover { transform: translate(-50%, -50%) scale(0.5); }
 /* first-entry intro: the three cloths start as a FLAT equal row — removing
    the class then animates the centre cloth GROWING into focus while the
    sides recede & dim (the showcase entrance). The row is scaled and the
@@ -1287,11 +1344,9 @@ html, body {
    keep their own scales — this only tames the in-focus state. */
 .hall-carousel--candle .hall-card.is-center { transform: translateX(-50%) scale(1.05); }
 /* the table hall floats its side cards up 36px for depth — candles must NOT
-   do that: every base stays on the same line in every phase (incl. hover) */
-.hall-carousel--candle .hall-card.is-left,
-.hall-carousel--candle .hall-card.is-left:hover  { transform: translateX(-50%) scale(0.62); }
-.hall-carousel--candle .hall-card.is-right,
-.hall-carousel--candle .hall-card.is-right:hover { transform: translateX(-50%) scale(0.62); }
+   do that: every base stays on the same line in every phase */
+.hall-carousel--candle .hall-card.is-left  { transform: translateX(-50%) scale(0.62); }
+.hall-carousel--candle .hall-card.is-right { transform: translateX(-50%) scale(0.62); }
 
 /* same first-entry intro row for the candle hall (standing cards): flat,
    equal, fully lit — then the first stand grows into focus */

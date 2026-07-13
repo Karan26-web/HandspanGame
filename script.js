@@ -15,14 +15,23 @@
   function fit() {
     var stage = document.getElementById('stage');
     if (!stage) return;
-    var vw = window.innerWidth;
-    var vh = window.innerHeight;
+    // visualViewport is the reliable size on phones (collapsing URL bars,
+    // pinch zoom); innerWidth/innerHeight is the desktop fallback
+    var vv = window.visualViewport;
+    var vw = vv ? vv.width : window.innerWidth;
+    var vh = vv ? vv.height : window.innerHeight;
     var scale = Math.min(vw / DESIGN_W, vh / DESIGN_H);
     stage.style.setProperty('--scale', scale);
   }
 
   window.addEventListener('resize', fit);
-  window.addEventListener('orientationchange', fit);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+  // many devices fire orientationchange BEFORE the new dimensions land —
+  // fit now, then again once the rotation has actually settled
+  window.addEventListener('orientationchange', function () {
+    fit();
+    setTimeout(fit, 300);
+  });
   fit();
 
   /* ---- boot gate -------------------------------------------------------- */

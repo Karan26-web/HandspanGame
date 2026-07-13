@@ -31,6 +31,17 @@
     </div>
   </div>
 
+  <!-- Landscape-only gate: fully covers the game in portrait orientation
+       (or any taller-than-wide window) with a "turn your device" prompt.
+       Pure CSS — shown/hidden by the (orientation) media query. -->
+  <div id="rotate" class="rotate-gate" aria-hidden="true">
+    <div class="rotate-gate__card">
+      <div class="rotate-gate__phone"></div>
+      <div class="rotate-gate__title">Turn your device</div>
+      <div class="rotate-gate__sub">This game plays in landscape.</div>
+    </div>
+  </div>
+
   <!-- Tap-to-start gate (PreLBD title art) so we can unlock the audio context -->
   <div id="boot" class="boot">
     <div class="boot__card">

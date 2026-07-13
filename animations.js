@@ -189,6 +189,36 @@ HS.FX = (function () {
     setTimeout(function () { el.classList.remove('anim-pulse'); }, 500);
   }
 
+  /* ---- green genie smoke (a character vanishes in a puff) ---------------- *
+   * Soft blurred puffs that billow outward & drift up while fading — the
+   * classic genie exit, in Gogo's green. */
+  var SMOKE_COLORS = ['rgba(110,214,126,0.95)', 'rgba(72,180,96,0.9)', 'rgba(150,232,160,0.85)'];
+  function smokePoof(x, y, opts) {
+    opts = opts || {};
+    var n = opts.count || 14;
+    var spread = opts.spread || 100;
+    var scale = opts.size || 1;   // puff size multiplier (big vanishes)
+    var layer = fxLayer();
+    for (var i = 0; i < n; i++) {
+      (function () {
+        var s = makeEl('p-smoke');
+        var ang = rand(0, Math.PI * 2);
+        var dist = rand(spread * 0.25, spread);
+        var size = rand(36, 78) * scale;
+        s.style.left = x + 'px';
+        s.style.top = y + 'px';
+        s.style.width = size + 'px';
+        s.style.height = size + 'px';
+        s.style.background = 'radial-gradient(circle, ' + pick(SMOKE_COLORS) + ', rgba(70,170,90,0) 70%)';
+        s.style.setProperty('--dx', (Math.cos(ang) * dist) + 'px');
+        s.style.setProperty('--dy', (Math.sin(ang) * dist * 0.7 - rand(24, 70)) + 'px');
+        s.style.animationDuration = rand(0.9, 1.5) + 's';
+        layer.appendChild(s);
+        setTimeout(function () { s.remove(); }, 1600);
+      })();
+    }
+  }
+
   /* ---- celebration combo ------------------------------------------------ */
   function celebrate(el) {
     HS.Audio.playSuccess();
@@ -201,7 +231,7 @@ HS.FX = (function () {
     } else {
       sparkleBurst(STAGE_W / 2, STAGE_H / 2, { count: 22, spread: 220 });
     }
-    setTimeout(function () { HS.Audio.playSparkle(); }, 150);
+    // (no extra sparkle chime — playSuccess already ends in its own shimmer)
   }
 
   return {
@@ -212,6 +242,7 @@ HS.FX = (function () {
     centerOf: centerOf,
     sparkleBurst: sparkleBurst,
     starBurst: starBurst,
+    smokePoof: smokePoof,
     ringBurst: ringBurst,
     confetti: confetti,
     floatStars: floatStars,

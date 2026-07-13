@@ -255,9 +255,14 @@ HS.Game = (function () {
 
   /* ======================================================================
    * GUESS PHASE  (tap to count)
-   * opts: { answer, mountHeading(bool), onResult(correctBool) }
-   * Builds the bottom tray, lets the player select cells, and judges on
-   * "Check my guess". Returns a Promise<boolean> (true if correct).
+   * opts: { answer, hintAnswer(bool), keepTray(bool) }
+   * Builds the bottom tray and lets the player pick a count.
+   * Default: the tray tears itself down and the promise resolves with the
+   * chosen count (the round then shows its verdict on a fresh screen).
+   * keepTray: the guess is judged on the SAME screen — resolves with a
+   * handle { count, liftHand(i), clearRest() } so the round can fly the
+   * chosen hands onto the measuring track (liftHand empties tray cell i and
+   * returns its stage centre) and then fade the leftover cells away.
    * ====================================================================== */
   function guessPhase(opts) {
     opts = opts || {};
@@ -349,19 +354,41 @@ HS.Game = (function () {
       committed = true;
       var count = idx + 1;
       if (nudge.parentNode) nudge.parentNode.remove();
-      cells.forEach(function (c) { c.cell.classList.remove('guess-cell--hint'); });
+      // the tap commits the guess: the hover-preview numbers come off the
+      // tray — counting happens on the track as the hands land, not here
+      cells.forEach(function (c) {
+        c.cell.classList.remove('guess-cell--hint', 'guess-cell--lit');
+        var b = c.hs.querySelector('.handspan__num'); if (b) b.remove();
+      });
       tray.style.pointerEvents = 'none';
 
       var step = 0;
       (function fillNext() {
         if (step >= count) {
-          setTimeout(function () { tray.remove(); resolveGuess(count); }, 380);
+          setTimeout(function () {
+            if (!opts.keepTray) { tray.remove(); resolveGuess(count); return; }
+            resolveGuess({
+              count: count,
+              // lift tray hand i off its cell: the cell keeps its footprint
+              // (no tray reflow) while the hand itself flies to the track
+              liftHand: function (i) {
+                var c = cells[i];
+                var p = FX.centerOf(c.hs);
+                c.hs.style.visibility = 'hidden';
+                return p;
+              },
+              // the extra (unselected) handspan buttons bow out together
+              clearRest: function () {
+                tray.style.transition = 'opacity 0.4s ease';
+                tray.style.opacity = '0';
+                return new Promise(function (r) { setTimeout(function () { tray.remove(); r(); }, 420); });
+              }
+            });
+          }, 380);
           return;
         }
         var c = cells[step];
         UI.setHandSpan(c.hs, 'solid');   // numbers show on hover only, not on commit
-        c.cell.dataset.selected = '1';
-        FX.pulse(c.cell);
         A.playPop();
         step++;
         setTimeout(fillNext, 170);

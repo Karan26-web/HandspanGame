@@ -512,7 +512,7 @@ HS.UI = (function () {
       if (!charEl || !document.body.contains(charEl)) { res(); return; }
       var c = HS.FX.centerOf(charEl);
       HS.FX.starBurst(c.x, c.y, { count: 16, spread: 100 });
-      HS.Audio.playSparkle();
+      HS.Audio.playWhoosh();   // soft swoop — the sparkle chime on every poof got noisy
       charEl.classList.add('gogo-char--poof-out');
       setTimeout(function () {
         charEl.style.visibility = 'hidden';
@@ -529,7 +529,7 @@ HS.UI = (function () {
       charEl.classList.add('gogo-char--poof-in');
       var c = HS.FX.centerOf(charEl);
       HS.FX.starBurst(c.x, c.y, { count: 16, spread: 100 });
-      HS.Audio.playSparkle();
+      HS.Audio.playPop();   // soft pop-in — one chime per teleport was plenty
       setTimeout(function () { charEl.classList.remove('gogo-char--poof-in'); res(); }, 430);
     });
   }
