@@ -57,7 +57,10 @@ HS.FX = (function () {
   function rand(a, b) { return a + Math.random() * (b - a); }
   function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
 
-  /* ---- sparkle burst ---------------------------------------------------- */
+  /* ---- sparkle burst ----------------------------------------------------
+   * SMALL four-point stars (the p-star shape), not coloured blocks — the
+   * old square p-spark particles read as "multi colour blocks" on every
+   * tap. Same API: callers keep passing count / spread / color. */
   function sparkleBurst(x, y, opts) {
     opts = opts || {};
     var n = opts.count || 14;
@@ -65,17 +68,17 @@ HS.FX = (function () {
     var layer = fxLayer();
     for (var i = 0; i < n; i++) {
       (function () {
-        var s = makeEl('p-spark');
+        var s = makeEl('p-star');
         var ang = rand(0, Math.PI * 2);
         var dist = rand(spread * 0.3, spread);
         var dx = Math.cos(ang) * dist;
         var dy = Math.sin(ang) * dist - rand(0, 30);
-        var size = rand(8, 20);
+        var size = rand(7, 14);   // smaller than the teleport-poof stars
         s.style.left = x + 'px';
         s.style.top = y + 'px';
         s.style.width = size + 'px';
         s.style.height = size + 'px';
-        s.style.background = opts.color || pick(COLORS);
+        s.style.color = opts.color || pick(STAR_COLORS);
         s.style.setProperty('--dx', dx + 'px');
         s.style.setProperty('--dy', dy + 'px');
         s.style.animationDuration = rand(0.6, 1.0) + 's';

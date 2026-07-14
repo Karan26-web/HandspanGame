@@ -74,7 +74,7 @@ HS.UI = (function () {
     var h = opts.h || 88;
     var variant = opts.variant || 'solid';
 
-    // Default unit is the vibrant hand.png artwork. Pass `anim:true` for the
+    // Default unit is the vibrant hand.webp artwork. Pass `anim:true` for the
     // pose the measuring animation (handSpanAnimation) settles on — its exact
     // last frame — so an impression left where the animation ends matches it
     // pixel-for-pixel.
@@ -91,7 +91,7 @@ HS.UI = (function () {
     // handspan can be placed into. No fill: outline only.
     if (variant === 'faded') {
       wrap.appendChild(el('img.handspan__rim', {
-        src: anim ? 'assets/handOutlineAnim.png' : 'assets/handOutline.png', alt: '', draggable: 'false'
+        src: anim ? 'assets/handOutlineAnim.webp' : 'assets/handOutline.webp', alt: '', draggable: 'false'
       }));
     }
     wrap.appendChild(el('img.handspan__hand', { src: src, alt: '', draggable: 'false' }));
@@ -106,7 +106,7 @@ HS.UI = (function () {
    * MEASURE HAND  — the animated hand that stretches to measure one span
    * (assets/handSpanAnimation.webm, transparent VP9). This is THE measuring
    * animation, reused wherever a hand actively measures (the tutorial demo and
-   * the guess-phase preview). It settles on the open pose (handSpanHand.png),
+   * the guess-phase preview). It settles on the open pose (handSpanHand.webp),
    * which the faded impressions reuse so they land exactly on the settle frame.
    * ====================================================================== */
   function MeasureHand(sizePx) {
@@ -160,7 +160,7 @@ HS.UI = (function () {
   }
 
   /* ======================================================================
-   * TABLE  — uses the provided Table.svg artwork
+   * TABLE  — uses the provided Table.webp artwork
    * opts: { scale, w }  -> width in px (height auto via 662x350 ratio)
    * Returns a wrapper so we can attach measuring strips / glow.
    * ====================================================================== */
@@ -169,7 +169,7 @@ HS.UI = (function () {
     opts = opts || {};
     var w = opts.w || 360;
     var ratio = opts.ratio || TABLE_RATIO;     // height / width of the artwork
-    var src = opts.src || 'assets/Table.png';
+    var src = opts.src || 'assets/Table.webp';
     var wrap = el('div.table');
     wrap.style.width = w + 'px';
     wrap.style.height = (w * ratio) + 'px';
@@ -238,7 +238,7 @@ HS.UI = (function () {
 
   /* ======================================================================
    * CHARACTERS
-   * Gogo -> provided gogo.png.  Tara -> built in pure CSS (no asset given).
+   * Gogo -> provided gogo.webp.  Tara -> built in pure CSS (no asset given).
    * ====================================================================== */
   function Gogo(opts) {
     opts = opts || {};

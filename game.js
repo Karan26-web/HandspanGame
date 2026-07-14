@@ -94,7 +94,8 @@ HS.Game = (function () {
   /* ---- standalone tap-to-continue gate (keeps current scene on screen) -- */
   // reading time for a line of on-screen text (same pacing as auto-advanced
   // dialogue) — callers pass this to tapToContinue as the arrow's hold-back
-  function readMs(text) { return Math.max(2400, 900 + String(text).split(/\s+/).length * 240); }
+  // matches rounds.js lineMs — unhurried pacing for early readers
+  function readMs(text) { return Math.max(3400, 1500 + String(text).split(/\s+/).length * 350); }
   // `delayMs` holds the arrow (and its tap catcher) back until the scene's
   // content has actually played out / been read — the button must never pop
   // in together with the objects it invites the child to move on from.
@@ -164,7 +165,7 @@ HS.Game = (function () {
   function dialogue(opts) {
     opts = opts || {};
     var host = opts.container || scene();
-    A.playDialogue();
+    A.playVO(opts.text);
 
     // character (position can be overridden per-scene via opts.charStyle)
     var charNode = null;
@@ -362,37 +363,32 @@ HS.Game = (function () {
       });
       tray.style.pointerEvents = 'none';
 
-      var step = 0;
-      (function fillNext() {
-        if (step >= count) {
-          setTimeout(function () {
-            if (!opts.keepTray) { tray.remove(); resolveGuess(count); return; }
-            resolveGuess({
-              count: count,
-              // lift tray hand i off its cell: the cell keeps its footprint
-              // (no tray reflow) while the hand itself flies to the track
-              liftHand: function (i) {
-                var c = cells[i];
-                var p = FX.centerOf(c.hs);
-                c.hs.style.visibility = 'hidden';
-                return p;
-              },
-              // the extra (unselected) handspan buttons bow out together
-              clearRest: function () {
-                tray.style.transition = 'opacity 0.4s ease';
-                tray.style.opacity = '0';
-                return new Promise(function (r) { setTimeout(function () { tray.remove(); r(); }, 420); });
-              }
-            });
-          }, 380);
-          return;
-        }
-        var c = cells[step];
-        UI.setHandSpan(c.hs, 'solid');   // numbers show on hover only, not on commit
-        A.playPop();
-        step++;
-        setTimeout(fillNext, 170);
-      })();
+      // the commit is INSTANT: the chosen run lights up together with ONE pop
+      // and the measuring flight begins right away. A per-hand drumroll here
+      // (pop-pop-pop before anything moves) only delays the payoff — the
+      // one-by-one counting beat belongs to the track, where the hands land.
+      for (var j = 0; j < count; j++) UI.setHandSpan(cells[j].hs, 'solid');
+      A.playPop();
+      setTimeout(function () {
+        if (!opts.keepTray) { tray.remove(); resolveGuess(count); return; }
+        resolveGuess({
+          count: count,
+          // lift tray hand i off its cell: the cell keeps its footprint
+          // (no tray reflow) while the hand itself flies to the track
+          liftHand: function (i) {
+            var c = cells[i];
+            var p = FX.centerOf(c.hs);
+            c.hs.style.visibility = 'hidden';
+            return p;
+          },
+          // the extra (unselected) handspan buttons bow out together
+          clearRest: function () {
+            tray.style.transition = 'opacity 0.4s ease';
+            tray.style.opacity = '0';
+            return new Promise(function (r) { setTimeout(function () { tray.remove(); r(); }, 420); });
+          }
+        });
+      }, 260);
     }
 
     return new Promise(function (resolve) { resolveGuess = resolve; });
@@ -501,7 +497,7 @@ HS.Game = (function () {
       function welcome(text) {
         var p = UI.WelcomePanel(text);
         s.appendChild(p);
-        A.playDialogue();
+        A.playVO(text);
         return FX.wait(readMs(text) + 600).then(function () { p.remove(); });
       }
 

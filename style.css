@@ -77,11 +77,11 @@ html, body {
 .hidden { display: none !important; }
 
 /* ============================================================================
- * BACKGROUND — uniform room image (assets/Bgm.png) on every screen
+ * BACKGROUND — uniform room image (assets/Bgm.webp) on every screen
  * ========================================================================== */
 .bg {
   position: absolute; inset: 0; z-index: 0; overflow: hidden;
-  background: url("assets/Bgm.png") center center / cover no-repeat;
+  background: url("assets/Bgm.webp") center center / cover no-repeat;
   transition: filter 0.7s ease;   /* smooth in/out of the .tut-blur room fade */
 }
 /* A subtle vignette to help white/dark UI read against the warm wall. */
@@ -278,7 +278,7 @@ html, body {
   transition: opacity 0.35s ease, transform 0.25s ease;
 }
 .handspan__hand {
-  /* hand.png has ~31% transparent side padding; scale the image up so the
+  /* hand.webp has ~31% transparent side padding; scale the image up so the
      VISIBLE hand fills the box width. Tiling boxes edge-to-edge then makes
      the hands touch with no gaps (1 / 0.689 ≈ 145%). */
   position: absolute; left: 50%; top: 50%;
@@ -491,7 +491,10 @@ html, body {
 /* 184px renders successGogo's visible height ~300px — same as the gogo-char
    poses, so Gogo doesn't shrink between the round and its success screen */
 .feedback-gogo--success { width: 184px; bottom: 260px; }
-.feedback-gogo--wrong   { width: 320px; bottom: 205px; }
+/* the wrong pose is the WIDEST genie (320px): at the shared right:100 his
+   body lies over the 10-span cloth's right edge (ends ~x937), so he hugs
+   the frame edge instead — right:24 puts his left edge at x936, just clear */
+.feedback-gogo--wrong   { width: 320px; bottom: 205px; right: 24px; }
 .feedback-gogo--clue    { width: 320px; bottom: 200px; }
 
 /* numbered circle under a measured handspan (clue / success) — same Figma
@@ -1385,7 +1388,7 @@ html, body {
   background: rgba(255, 255, 255, 0.18);
   box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 8px rgba(255, 255, 255, 0.5);
 }
-/* glowing "handspan button" podium (assets/handDrag.svg) under the rest hand:
+/* glowing "handspan button" podium (assets/handDrag.webp) under the rest hand:
    the inner light softly brightens and settles — no movement, no halo */
 .drag-podium {
   position: absolute; z-index: 21; pointer-events: none;

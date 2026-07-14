@@ -21,14 +21,14 @@ HS.Rounds = (function () {
   // distinct artwork per table (each table keeps its own look as it scrolls).
   // e0/e1 = the table's OUTER leg-foot edges as a fraction of its width (measured
   // opaque), so the measuring lines sit on the table's outer outline.
-  // Every table uses the SAME brown artwork (Table.svg); they differ only by
+  // Every table uses the SAME brown artwork (Table.webp); they differ only by
   // SIZE — the more handspans, the longer the table. foot = fraction of the art
   // height where the legs meet the floor (so it stands ON the ground).
   // foot = fraction of the rendered element height where the VISIBLE legs end.
-  // Table.svg (aspect ~0.404) letterboxes inside the 0.529-ratio box, so the
+  // Table.webp (aspect ~0.404) letterboxes inside the 0.529-ratio box, so the
   // legs sit at ~0.855 of the box height, not ~0.965 — anchor by that so the
   // legs land on FLOOR_Y and meet the guide-line tops.
-  var BROWN = { src: 'assets/Table.png', ratio: 350 / 662, name: 'brown', e0: 0.0375, e1: 0.9542, foot: 0.855 };
+  var BROWN = { src: 'assets/Table.webp', ratio: 350 / 662, name: 'brown', e0: 0.0375, e1: 0.9542, foot: 0.855 };
   var TABLE_ART = [BROWN, BROWN, BROWN];
   function art(i) { return TABLE_ART[i % TABLE_ART.length]; }
 
@@ -47,7 +47,7 @@ HS.Rounds = (function () {
     var b = UI.TutorialBubble({ who: 'gogo', text: text });
     Object.assign(b.style, { left: '50%', top: '18px', transform: 'translateX(-50%)' });
     s.appendChild(b);
-    A.playDialogue();
+    A.playVO(text);
     // resolves with the panel node — drag flows clear it when measuring ends
     // (guess flows just leave it; the scene transition takes it away)
     return FX.wait(lineMs(text)).then(function () { return b; });
@@ -67,25 +67,30 @@ HS.Rounds = (function () {
    * in as it lands (below the hand on a horizontal track, beside it on a
    * vertical stack, the same spots the clue screens use). `g` is guessPhase's
    * keepTray handle; geo: { unit, vert, slotAt(i)->{left,top},
-   * numAt(i)->{left,top: the circle's CENTRE, badge-pop centres it} }. */
+   * numAt(i)->{left,top: the circle's CENTRE, badge-pop centres it} }.
+   * geo.nums === false skips the in-flight circles — a CORRECT guess saves
+   * the counting for the success count-off after "Hurray!" (see countOff);
+   * a wrong guess keeps them, so the child sees their count fall short. */
   var TRAY_UNIT = 72;   // guess-tray hand size (see guessPhase) — the flying
                         // hand starts at this scale and settles at geo.unit
   function measureFromTray(s, g, geo) {
     return new Promise(function (resolve) {
-      var i = 0;
-      (function flyNext() {
-        if (i >= g.count) { setTimeout(resolve, 260); return; }
-        var idx = i;
+      var count = g.count, launched = 0, landed = 0;
+      // one hand's full glide, tray cell -> track slot; onLanded fires with
+      // the landing pop as the hand settles
+      function flyOne(idx, onLanded) {
         var from = g.liftHand(idx);
         var slot = geo.slotAt(idx);
         var node = UI.HandSpan({ variant: 'solid', w: geo.unit, h: geo.unit, anim: true });
         if (geo.vert) node.classList.add('handspan--vert');
         node.classList.add('fly-span');
-        // an unhurried glide — the child's eye follows each hand the whole way
+        // a SLOW, readable glide — the child's eye follows each hand the
+        // whole way; the lift whoosh is the only sound of the movement
+        // (no landing pop: the one-by-one SFX belongs to the COUNTING)
         Object.assign(node.style, {
           left: (from.x - geo.unit / 2) + 'px', top: (from.y - geo.unit / 2) + 'px',
           transform: 'scale(' + (TRAY_UNIT / geo.unit) + ')',
-          transition: 'left 0.9s cubic-bezier(.3,.7,.3,1), top 0.9s cubic-bezier(.3,.7,.3,1), transform 0.9s ease'
+          transition: 'left 1.25s cubic-bezier(.3,.7,.3,1), top 1.25s cubic-bezier(.3,.7,.3,1), transform 1.25s ease'
         });
         s.appendChild(node);
         A.playWhoosh();
@@ -93,21 +98,45 @@ HS.Rounds = (function () {
           node.style.left = slot.left + 'px'; node.style.top = slot.top + 'px';
           node.style.transform = 'scale(1)';
         });
-        // strict one-thing-at-a-time beat: the hand finishes its whole glide,
-        // THEN its count pops in, THEN the next hand lifts off
-        i++;
         setTimeout(function () {
-          A.playPop(); FX.pulse(node);   // landing SFX + a soft settle, no sparkles
-          setTimeout(function () {
-            // the count arrives on its own beat — same circles as the clue screens
-            var np = geo.numAt(idx);
-            var num = el('div.track-num track-num--pop', { text: String(idx + 1) });
-            Object.assign(num.style, { position: 'absolute', left: np.left + 'px', top: np.top + 'px', zIndex: '25' });
-            s.appendChild(num);
-            setTimeout(flyNext, 550);
-          }, 350);
-        }, 920);
-      })();
+          FX.pulse(node);   // a silent soft settle on touchdown
+          onLanded();
+        }, 1300);
+      }
+      if (geo.nums === false) {
+        // CORRECT guess (no counting here — the success count-off follows):
+        // the hands fly as a spaced TRAIN, each lifting while the one ahead
+        // is still mid-glide. Constant motion, no dead air between landings,
+        // and the landing pops still arrive in order.
+        (function launchNext() {
+          if (launched >= count) return;
+          flyOne(launched++, function () {
+            landed++;
+            if (landed >= count) setTimeout(resolve, 300);
+          });
+          setTimeout(launchNext, 700);
+        })();
+      } else {
+        // WRONG guess: strict one-thing-at-a-time beat — the hand finishes
+        // its whole glide, THEN its count pops in, THEN the next lifts off,
+        // so the child counts along and sees exactly where the guess fell
+        (function flyNext() {
+          if (launched >= count) { setTimeout(resolve, 260); return; }
+          var idx = launched++;
+          flyOne(idx, function () {
+            setTimeout(function () {
+              // the count arrives on its own beat — same circles as the clue
+              // screens, each with its one-by-one tick
+              var np = geo.numAt(idx);
+              var num = el('div.track-num track-num--pop', { text: String(idx + 1) });
+              Object.assign(num.style, { position: 'absolute', left: np.left + 'px', top: np.top + 'px', zIndex: '25' });
+              s.appendChild(num);
+              A.playPop();
+              setTimeout(flyNext, 550);
+            }, 350);
+          });
+        })();
+      }
     });
   }
 
@@ -121,7 +150,10 @@ HS.Rounds = (function () {
   // BOTTOM-anchored beside his head: the bubble grows UPWARD with its text, so
   // the tail tip stays on his head whether the line is one word or two rows
   var GOGO_BUBBLE = { left: '430px', bottom: '600px' };
-  function lineMs(text) { return Math.max(2400, 900 + String(text).split(/\s+/).length * 240); }
+  // Unhurried pacing for early readers (~1.5-2 words/sec + settle time):
+  // even the shortest line holds 3.4s, and every word adds a full 350ms so a
+  // child can follow the voice-over AND the text comfortably.
+  function lineMs(text) { return Math.max(3400, 1500 + String(text).split(/\s+/).length * 350); }
   // opts (all optional): pose ('talk'|'show'|...), spot {left,top}, bubble
   // {left,bottom} — the hall intros use the presenting ShowingGogo far left
   function gogoSay(s, lines, opts) {
@@ -137,7 +169,7 @@ HS.Rounds = (function () {
           var b = UI.SayBubble(text, 'left');
           Object.assign(b.style, opts.bubble || GOGO_BUBBLE);
           s.appendChild(b);
-          A.playDialogue();
+          A.playVO(text);
           setTimeout(function () { b.remove(); res(); }, lineMs(text));
         });
       });
@@ -157,10 +189,12 @@ HS.Rounds = (function () {
     // top edge (the 10-span cloth tops out ~y134), so the bubble never lies
     // over the measured object; the raised genie keeps the tail on his head
     success: { tail: 'right', style: { right: '210px', bottom: '595px' } },
-    wrong:   { tail: 'right', style: { right: '250px', bottom: '570px' } },
+    // the wrong genie hugs the right frame edge (see .feedback-gogo--wrong),
+    // so his bubble rides 76px further right too — tail tip stays on his head
+    wrong:   { tail: 'right', style: { right: '174px', bottom: '570px' } },
     clue:    { tail: 'left',  style: { left: '235px',  bottom: '558px' } }
   };
-  function feedback(s, who, text) {
+  function feedback(s, who, text, opts) {
     var src = who === 'success' ? 'assets/successGogo.webp'
             : who === 'wrong' ? 'assets/wrongGogo.webp'
             : 'assets/ShowingGogo.webp';
@@ -169,8 +203,14 @@ HS.Rounds = (function () {
     var onRight = who === 'wrong' || who === 'success';
     var gogo = el('img.feedback-gogo feedback-gogo--' + who + ' ' + (onRight ? 'feedback-gogo--right' : 'feedback-gogo--left'), { src: src, alt: '', draggable: 'false' });
     s.appendChild(gogo);
-    if (who === 'success') A.playClap();   // cheer whenever successGogo appears
+    // (no clap here — on success the cheer belongs AFTER the count-off:
+    // "Well Done!" -> 1..N one by one -> clap. See countOff's clap option.)
     var lines = Array.isArray(text) ? text : [text];
+    // opts.holdFirst: minimum ms the FIRST line stays up before the next one —
+    // the success screens hold "Well Done!"/"Hurray!" until the handspan
+    // count-off has finished, so the sentence lands with the count as proof
+    var holdFirst = (opts && opts.holdFirst) || 0;
+    function stayMs(idx) { return idx === 0 ? Math.max(lineMs(lines[idx]), holdFirst) : lineMs(lines[idx]); }
     var li = 0, panel = null;
     (function show() {
       if (panel) panel.remove();
@@ -179,20 +219,57 @@ HS.Rounds = (function () {
       panel = UI.SayBubble(line, spot.tail);
       Object.assign(panel.style, spot.style);
       s.appendChild(panel);
-      A.playDialogue();
+      A.playVO(line);
       li++;
       if (li < lines.length) {
         setTimeout(function () {
           if (document.body.contains(panel)) show();   // scene may have moved on
-        }, lineMs(line));
+        }, stayMs(li - 1));
       }
     })();
     // ms until the LAST line has landed plus a beat to take it in — callers
     // pass this to tapToContinue so the arrow only appears once the genie's
     // message has actually been delivered
-    var wait = 900;
-    for (var w = 0; w < lines.length - 1; w++) wait += lineMs(lines[w]);
+    var wait = 1400;
+    for (var w = 0; w < lines.length - 1; w++) wait += stayMs(w);
     return wait;
+  }
+
+  /* ---- success COUNT-OFF: 1..N circles pop in one by one ------------------
+   * EVERY flow's success plays the same beat: the celebratory word appears,
+   * then the placed hands count off (1..N, the clue screens' circles), and
+   * only then the "...N handspans" sentence lands (pass the returned ms to
+   * feedback's holdFirst). posAt(i) -> {left,top} — badge-pop centres the
+   * circle on `left`, so callers pass the same coords their clue screen uses. */
+  // one number per beat, slow enough for the child to count along out loud
+  var COUNT_START = 700, COUNT_STEP = 450;
+  // opts.clap: the SUCCESS count-offs end on the cheerful clap — it fires the
+  // moment the LAST circle lands (clue-screen counts pass no opts: a hint
+  // earns no applause). Every flow gets the same beat:
+  //   "Well Done!"/"Hurray!" -> 1..N one by one -> CLAP -> the sentence.
+  function countOff(parent, n, posAt, opts) {
+    for (var i = 0; i < n; i++) {
+      var p = posAt(i);
+      var num = el('div.track-num track-num--pop', { text: String(i + 1) });
+      Object.assign(num.style, {
+        position: 'absolute', left: p.left + 'px', top: p.top + 'px',
+        zIndex: '25', animationDelay: (COUNT_START + i * COUNT_STEP) / 1000 + 's'
+      });
+      parent.appendChild(num);
+      // the one-by-one tick rides WITH each circle's pop-in — this counting
+      // beat is the only place the per-item SFX lives
+      setTimeout(A.playPop, COUNT_START + i * COUNT_STEP);
+    }
+    if (opts && opts.clap) {
+      // the cheer starts as the LAST circle lands, and the count-off isn't
+      // "over" until the whole clap has rung out (clapSound.ogg is ~2.0s) —
+      // so the "...N handspans" sentence never talks over the applause
+      var clapAt = COUNT_START + (n - 1) * COUNT_STEP + 350;
+      setTimeout(A.playClap, clapAt);
+      return clapAt + 2050 + 250;   // clap length + a breath
+    }
+    // ms until the last circle has popped, plus a settle beat
+    return COUNT_START + n * COUNT_STEP + 600;
   }
 
   /* ---- a curved dashed "drag here" arrow (SVG) from (x1,y1) to (x2,y2) --- */
@@ -565,7 +642,7 @@ HS.Rounds = (function () {
         // to the sequence (runTutorial / beginRound)
         var layer = buildStage(s, null, true);
         // the standing task panel: the tutorial is Gogo-led (he speaks in
-        // person), but the normal rounds pin "Find out how long the table is."
+        // person), but the normal rounds pin "Find how long the table is."
         // here for the whole measure (see beginRound / finishMeasure)
         var bubble = null;
 
@@ -592,10 +669,10 @@ HS.Rounds = (function () {
         var REST = { left: 92, top: 508 };   // hand's resting spot (bottom-left, lifted out of the
                                              // corner but clear of the lounging Gogo's pointing finger)
         // the resting spot reads as a glowing "handspan button": the purple
-        // podium art (assets/handDrag.svg) sits under the hovering hand, its
+        // podium art (assets/handDrag.webp) sits under the hovering hand, its
         // light beam rising up behind the hand (hand z-index is higher)
         var podW = Math.round(HW * 2.6), podH = Math.round(podW * 525 / 532);
-        var podium = el('img.drag-podium', { src: 'assets/handDrag.svg', alt: '', draggable: 'false' });
+        var podium = el('img.drag-podium', { src: 'assets/handDrag.webp', alt: '', draggable: 'false' });
         Object.assign(podium.style, {
           left: (REST.left + HW / 2 - podW / 2) + 'px',
           top: (REST.top + HW + 14 - Math.round(podH * 0.59)) + 'px',   // disc a beat below the hovering hand
@@ -748,7 +825,13 @@ HS.Rounds = (function () {
           if (curHand) { curHand.remove(); curHand = null; }   // remove the podium source
           podium.remove();   // the empty button has nothing left to offer
           FX.celebrate();
-          var readWait = feedback(s, 'success', ['Well Done!', 'The table is ' + spans + ' handspans long!']);
+          // "Well Done!" -> the placed hands COUNT OFF below (1..N circles,
+          // the clue screens' language) -> only then "...N handspans long!"
+          // (holdFirst keeps the first line up until the count has finished)
+          var countMs = countOff(s, spans, function (ni) {
+            return { left: TRACK_X0 + ni * HW + HW / 2, top: HAND_TOP + HW + 6 };
+          }, { clap: true });
+          var readWait = feedback(s, 'success', ['Well Done!', 'The table is ' + spans + ' handspans long!'], { holdFirst: countMs });
           h.tapToContinue(readWait).then(function () { opts.onDone(); });
         }
 
@@ -839,7 +922,7 @@ HS.Rounds = (function () {
             var b = UI.SayBubble(text, tail || 'left');
             Object.assign(b.style, posOverride || demoBubbleAt(pose || 'talk'));
             s.appendChild(b);
-            A.playDialogue();
+            A.playVO(text);
             // every timed line stays up at least long enough to be READ by a
             // child (lineMs scales with the word count)
             if (ms) setTimeout(function () { b.remove(); res(); }, Math.max(ms, lineMs(text)));
@@ -870,8 +953,9 @@ HS.Rounds = (function () {
             var b = UI.SayBubble('No!', 'left');
             Object.assign(b.style, pointBubbleAt(cx));
             s.appendChild(b);
-            A.playWrong();
-            setTimeout(function () { b.remove(); res(); }, 2600);
+            A.playWrong();          // ducked under the spoken "No!"
+            A.playVO('No!');
+            setTimeout(function () { b.remove(); res(); }, 3400);
           });
         }
         // teleport the teacher back to his corner
@@ -890,8 +974,9 @@ HS.Rounds = (function () {
             var b = UI.SayBubble(text, tail || 'left');
             Object.assign(b.style, posOverride || demoBubbleAt(good ? 'talk' : 'wrong'));
             s.appendChild(b);
-            if (good) A.playSuccess(); else A.playWrong();
-            setTimeout(function () { b.remove(); res(); }, 2600);
+            if (good) A.playSuccess(); else A.playWrong();   // ducked under the VO
+            A.playVO(text);
+            setTimeout(function () { b.remove(); res(); }, 3400);
           });
         }
 
@@ -985,7 +1070,7 @@ HS.Rounds = (function () {
             startRuleBubble = UI.SayBubble('We must start from one end of the table.', 'left');
             Object.assign(startRuleBubble.style, pointBubbleAt(TRACK_X0));
             s.appendChild(startRuleBubble);
-            A.playDialogue();
+            A.playVO('We must start from one end of the table.');
             return FX.wait(Math.max(3400, lineMs('We must start from one end of the table.')));
           });
           // ...the straddling hand slides to the correct spot, landing right
@@ -1067,7 +1152,7 @@ HS.Rounds = (function () {
         }
 
         // non-tutorial rounds: staged reveal — the table alone, then the guide
-        // lines, then the TASK PANEL ("Find out...") which STAYS up for the
+        // lines, then the TASK PANEL ("Find...") which STAYS up for the
         // whole measure (cleared in finishMeasure), then the handspan
         function beginRound() {
           var seq = FX.wait(1000);                                  // 1. the table alone
@@ -1076,7 +1161,7 @@ HS.Rounds = (function () {
             return FX.wait(1100);
           });
           seq = seq.then(function () {                              // 3. the standing task panel
-            return instructStay(s, 'Find out how long the table is.').then(function (p) { bubble = p; });
+            return instructStay(s, 'Find how long the table is.').then(function (p) { bubble = p; });
           });
           seq = seq.then(function () {                              // 4. the handspan appears
             podium.style.display = '';
@@ -1113,6 +1198,9 @@ HS.Rounds = (function () {
    *             rise = node box height above the shared floor line
    *   target    span count to spotlight
    *   glow      css class for the flow's target glow (added to the node)
+   *   storyLine Tara's spoken request ("We need a ... that is N handspans
+   *             ...") — shown in a bubble beside the clip + voiced while
+   *             the (silent) GogobTara clip plays
    *   onDone    where the flow goes after the bag leaves */
   function finaleScreen(config, h, opts) {
     h.setBackground(opts.bg || 'play');
@@ -1143,7 +1231,9 @@ HS.Rounds = (function () {
       // ---- the storytellers: the GogobTara clip plays on the LEFT. If the
       // clip is missing/broken the beat is skipped silently (no line, no smoke).
       var host = el('div.finale-video');
-      Object.assign(host.style, { position: 'absolute', left: '46px', bottom: '80px', width: '350px', zIndex: '12' });
+      // tucked into the top-left corner of the floor area — clear of the
+      // object row, with the story bubble sitting right beside Tara's head
+      Object.assign(host.style, { position: 'absolute', left: '16px', bottom: '150px', width: '350px', zIndex: '12' });
       var vid = document.createElement('video');
       vid.src = 'assets/gogobTara.webm';
       vid.setAttribute('playsinline', ''); vid.playsInline = true; vid.preload = 'auto';
@@ -1151,12 +1241,29 @@ HS.Rounds = (function () {
       host.appendChild(vid);
       s.appendChild(host);
 
+      // Tara's story line — HER text box for the flow ("We need a ... that
+      // is N handspans ...") beside the clip, voiced by her recording. The
+      // clip itself is silent, so her voice carries the story.
+      var storyBubble = null;
+      function showStory() {
+        if (!opts.storyLine || storyBubble) return;
+        storyBubble = UI.SayBubble(opts.storyLine, 'left');
+        // BOTTOM-anchored just above Tara's head (she stands on the clip's
+        // right side), tail-left dipping to her crown — the bubble grows
+        // upward so longer lines never drift down over the characters
+        Object.assign(storyBubble.style, { left: '290px', bottom: '440px', zIndex: '13' });
+        s.appendChild(storyBubble);
+        A.playVO(opts.storyLine);
+      }
+      function hideStory() { if (storyBubble) { storyBubble.remove(); storyBubble = null; } }
+
       function playStory() {
         return new Promise(function (resolve) {
           var settled = false;
-          function done() { if (settled) return; settled = true; resolve(); }
+          function done() { if (settled) return; settled = true; hideStory(); resolve(); }
           function fallback() {
             if (settled) return; settled = true;
+            hideStory();
             host._gone = true; host.remove();
             resolve();
           }
@@ -1165,21 +1272,22 @@ HS.Rounds = (function () {
           if (vid.error || vid.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) { fallback(); return; }
           vid.addEventListener('ended', done);
           vid.addEventListener('error', fallback);
-          vid.playbackRate = 0.7;   // an unhurried telling (the clip is short)
+          vid.playbackRate = 0.55;   // an unhurried telling (the clip is short)
           var pr = vid.play();
-          if (pr && pr.catch) pr.catch(function () {
+          if (pr && pr.then) pr.then(showStory).catch(function () {
             if (vid.error || vid.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) { fallback(); return; }
             vid.muted = true;                       // autoplay-with-sound blocked: retry muted
-            vid.play().catch(fallback);             // still refuses -> skip the beat
+            vid.play().then(showStory).catch(fallback);   // still refuses -> skip the beat
           });
+          else showStory();
           setTimeout(done, 15000);   // a stalled decode must never wedge the finale
         });
       }
 
-      var run = FX.wait(1000);
+      var run = FX.wait(1600);   // a calm look at the line-up first
       // 1. the storytellers tell it (beat skipped silently if the clip is absent)
       run = run.then(playStory);
-      run = run.then(function () { return FX.wait(500); });   // let the last frame land
+      run = run.then(function () { return FX.wait(1200); });   // let the story sink in
       // 2. they vanish in GREEN GENIE SMOKE the moment their story ends
       run = run.then(function () {
         if (host._gone) return;
@@ -1231,6 +1339,7 @@ HS.Rounds = (function () {
   function hallSuccess(config, h) {
     finaleScreen(config, h, {
       bg: 'play',
+      storyLine: 'We need a table that is ' + state.target + ' handspans long.',
       items: state.tables.map(function (t, i) {
         var tw = (34 * t.spans) / (art(i).e1 - art(i).e0);
         return {
@@ -1273,10 +1382,20 @@ HS.Rounds = (function () {
       });
       var offscreen = 'translateX(' + (fromLeft ? '-145%' : '145%') + ')';
       if (fromLeft) gogo.style.left = '30px'; else gogo.style.right = '30px';
-      gogo.style.transform = offscreen;
+      // he MATERIALISES on the spot in GREEN GENIE SMOKE — the same cloud the
+      // storytellers vanish in, so arrivals and departures share one magic
+      // language. No slide-in: only his EXIT flies out the side.
+      gogo.style.opacity = '0';
       s.appendChild(gogo);
+      var gc = FX.centerOf(gogo);
       A.playWhoosh();
-      requestAnimationFrame(function () { gogo.style.transform = 'translateX(0)'; });
+      FX.smokePoof(gc.x, gc.y - gc.h * 0.3, { count: 16, spread: 150, size: 2 });
+      FX.smokePoof(gc.x, gc.y,              { count: 16, spread: 180, size: 2.4 });
+      FX.smokePoof(gc.x, gc.y + gc.h * 0.3, { count: 16, spread: 150, size: 2 });
+      setTimeout(function () {
+        gogo.style.transition = 'opacity 0.45s ease';
+        gogo.style.opacity = '1';   // revealed under the cloud as it rolls open
+      }, 200);
 
       setTimeout(function () {
         A.playWhoosh();
@@ -1287,7 +1406,9 @@ HS.Rounds = (function () {
         wrap.style.transform = 'translate(' + (sackX - wc.x) + 'px,' + (sackY - wc.y) + 'px) scale(0.06) rotate(18deg)';
         wrap.style.opacity = '0';
         setTimeout(function () {
-          FX.sparkleBurst(sackX, sackY, { count: 16, spread: 90 }); A.playSparkle();
+          // a soft pop as the object lands in the sack — the sparkle chime
+          // ("twii") felt off against the smoke-and-whoosh genie magic
+          FX.sparkleBurst(sackX, sackY, { count: 16, spread: 90 }); A.playPop();
           // the bag gives a little "stuffed" bounce...
           gogo.style.transition = 'transform 0.18s ease';
           gogo.style.transform = 'translateY(-10px) scale(1.04)';
@@ -1313,6 +1434,7 @@ HS.Rounds = (function () {
     h.transitionTo(function () {
       var s = h.scene();
       FX.confetti({ count: 140 });
+      A.playVO('You did it! 🎉');   // spoken first so the chime ducks under it
       A.playSuccess();
 
       var col = el('div.center-col');
@@ -1499,14 +1621,14 @@ HS.Rounds = (function () {
 
   /* ====================================================================== *
    * CANDLE ROUND (flow 3) — VERTICAL DRAG measuring.
-   * Plain pillar candles (Candle.png) measured by HEIGHT with the SAME
+   * Plain pillar candles (Candle.webp) measured by HEIGHT with the SAME
    * drag-the-handspan mechanic as the tables: the child drags hands from
    * the podium into a column beside the candle, bottom-to-top, no gaps.
    * Fixed order: 4 -> 2 -> the 3-span target (bagged last).
    * ====================================================================== */
-  // alpha-measured from Candle.png (like the stand's base edge): body top /
+  // alpha-measured from Candle.webp (like the stand's base edge): body top /
   // bottom / half-width as fractions of the image height & width
-  var PILLAR = { src: 'assets/Candle.png', ar: 1536 / 1024, topF: 0.122, botF: 0.956, sideF: 0.1146 };
+  var PILLAR = { src: 'assets/Candle.webp', ar: 1536 / 1024, topF: 0.122, botF: 0.956, sideF: 0.1146 };
   var PILLAR_VIS = PILLAR.botF - PILLAR.topF;
   var pillarState = null;
 
@@ -1606,7 +1728,7 @@ HS.Rounds = (function () {
 
       var REST = { left: 92, top: 508 };   // podium spot (same as the table flow)
       var podW = Math.round(HV * 2.6), podH = Math.round(podW * 525 / 532);
-      var podium = el('img.drag-podium', { src: 'assets/handDrag.svg', alt: '', draggable: 'false' });
+      var podium = el('img.drag-podium', { src: 'assets/handDrag.webp', alt: '', draggable: 'false' });
       Object.assign(podium.style, {
         left: (REST.left + HV / 2 - podW / 2) + 'px',
         top: (REST.top + HV + 14 - Math.round(podH * 0.59)) + 'px',
@@ -1752,7 +1874,7 @@ HS.Rounds = (function () {
         setTimeout(function () { clone.remove(); }, 220);
         armIdle();
       }
-      var taskPanel = null;   // the standing "Find out..." panel (up for the whole measure)
+      var taskPanel = null;   // the standing "Find..." panel (up for the whole measure)
       function finish() {
         alive = false; stopIdle();
         // the standing task panel has served its purpose — clear it so it
@@ -1761,7 +1883,13 @@ HS.Rounds = (function () {
         if (curHand) { curHand.remove(); curHand = null; }
         podium.remove();
         FX.celebrate();
-        var readWait = feedback(s, 'success', ['Well Done!', 'The candle is ' + spans + ' handspans tall!']);
+        // "Well Done!" -> the stacked hands COUNT OFF beside the column
+        // (bottom-to-top, in placement order) -> only then "...N handspans
+        // tall!" (holdFirst keeps the first line up until the count is done)
+        var countMs = countOff(s, spans, function (ni) {
+          return { left: STACK_LEFT - 26, top: BASE_Y - HV * (ni + 1) + HV / 2 - 18 };
+        }, { clap: true });
+        var readWait = feedback(s, 'success', ['Well Done!', 'The candle is ' + spans + ' handspans tall!'], { holdFirst: countMs });
         h.tapToContinue(readWait).then(function () { opts.onDone(); });
       }
 
@@ -1775,7 +1903,7 @@ HS.Rounds = (function () {
           FX.sparkleBurst(CX + BODY_HALF + 24, BASE_Y, { count: 6, spread: 40, color: '#e11dff' });
           return FX.wait(1100);
         })
-        .then(function () { return instructStay(s, 'Find out how tall the candle is.').then(function (p) { taskPanel = p; }); })
+        .then(function () { return instructStay(s, 'Find how tall the candle is.').then(function (p) { taskPanel = p; }); })
         .then(function () {
           if (!alive) return;
           podium.style.display = '';
@@ -1791,6 +1919,7 @@ HS.Rounds = (function () {
   function pillarSuccess(config, h) {
     finaleScreen(config, h, {
       bg: 'play',
+      storyLine: 'We need a candle that is ' + pillarState.target + ' handspans tall.',
       items: pillarState.list.map(function (spans) {
         var wrap = pillarImg(45 * spans);
         return {
@@ -1815,7 +1944,7 @@ HS.Rounds = (function () {
    * top-to-bottom, so the dashed guides are HORIZONTAL — one at the cup rim,
    * one at the base — and the hands stack vertically between them.
    * ====================================================================== */
-  // candleStandClean.png: cup rim at 0.111 of its height, base at 0.753,
+  // candleStandClean.webp: cup rim at 0.111 of its height, base at 0.753,
   // (visible height = 0.642 of the image); image aspect w/h = 1536/1024 = 1.5.
   var CANDLE = { src: 'assets/candleStandClean.webp', ar: 1536 / 1024, topF: 0.111, botF: 0.753 };
   var CANDLE_VIS = CANDLE.botF - CANDLE.topF;   // 0.642
@@ -1989,19 +2118,26 @@ HS.Rounds = (function () {
         run = run.then(function () { return instructStay(s, 'Guess how many handspans tall the candle stand is.').then(function (p) { panel = p; }); });
         run = run.then(function () { return h.guessPhase({ answer: spans, keepTray: true }); });
         // the verdict plays on THIS screen: the chosen hands fly out of the
-        // tray and stack up the stand (counting as they land), the leftover
-        // tray buttons fade away, and only then Gogo delivers his line
+        // tray and stack up the stand, the leftover tray buttons fade away,
+        // and only then Gogo delivers his line. A CORRECT guess saves the
+        // counting for after "Hurray!" (the success count-off); a wrong one
+        // counts in flight so the child sees where their guess landed.
         run = run.then(function (g) {
+          var good = g.count === spans;
           return measureFromTray(s, g, {
-            unit: HV, vert: true,
+            unit: HV, vert: true, nums: !good,
             slotAt: function (i) { return { left: STACK_LEFT, top: BASE_Y - HV * (i + 1) }; },
             numAt: function (i) { return { left: STACK_LEFT - 26, top: BASE_Y - HV * (i + 1) + HV / 2 - 18 }; }
           }).then(function () { return g.clearRest(); })
             .then(function () { if (panel) { panel.remove(); panel = null; } return FX.wait(300); })
             .then(function () {
-              if (g.count === spans) {
+              if (good) {
                 FX.celebrate();
-                return h.tapToContinue(feedback(s, 'success', ['Hurray!', 'This stand is ' + spans + ' handspans tall.']))
+                // "Hurray!" -> the stacked hands COUNT OFF -> "...N handspans tall."
+                var countMs = countOff(s, spans, function (i) {
+                  return { left: STACK_LEFT - 26, top: BASE_Y - HV * (i + 1) + HV / 2 - 18 };
+                }, { clap: true });
+                return h.tapToContinue(feedback(s, 'success', ['Hurray!', 'This stand is ' + spans + ' handspans tall.'], { holdFirst: countMs }))
                   .then(function () { document.getElementById('bg').classList.remove('tut-blur'); opts.onDone(); });
               }
               A.playWrong();
@@ -2019,17 +2155,12 @@ HS.Rounds = (function () {
         placeStack(layer, 'solid', null, true);
         // the clue COUNTS the stack: 1..N circles pop in one by one, each
         // beside its hand (below-the-hand would land inside the previous
-        // hand in a vertical stack, so they sit just outside the column)
-        for (var i = 0; i < spans; i++) {
-          var num = el('div.track-num track-num--pop', { text: String(i + 1) });
-          Object.assign(num.style, {
-            position: 'absolute', left: (STACK_LEFT - 26) + 'px',
-            top: (BASE_Y - HV * (i + 1) + HV / 2 - 18) + 'px',
-            animationDelay: (0.45 + i * 0.28) + 's'
-          });
-          layer.appendChild(num);
-        }
-        var readWait = feedback(s, 'clue', 'Here is a clue.');
+        // hand in a vertical stack, so they sit just outside the column);
+        // the arrow holds until BOTH the line is read and the count is done
+        var countMs = countOff(layer, spans, function (i) {
+          return { left: STACK_LEFT - 26, top: BASE_Y - HV * (i + 1) + HV / 2 - 18 };
+        });
+        var readWait = Math.max(feedback(s, 'clue', 'Here is a clue.'), countMs);
         return h.tapToContinue(readWait).then(function () { guessScreen(true); });
       });
     }
@@ -2040,6 +2171,7 @@ HS.Rounds = (function () {
   function candleSuccess(config, h) {
     finaleScreen(config, h, {
       bg: 'play',
+      storyLine: 'We need a candle stand that is ' + candleState.target + ' handspans tall.',
       items: candleState.list.map(function (spans) {
         var wrap = candleImg(40 * spans);
         return {
@@ -2224,19 +2356,26 @@ HS.Rounds = (function () {
         run = run.then(function () { return instructStay(s, 'Guess how long the tablecloth is.').then(function (p) { panel = p; }); });
         run = run.then(function () { return h.guessPhase({ answer: spans, hintAnswer: opts.showPreview, keepTray: true }); });
         // the verdict plays on THIS screen: the chosen hands fly out of the
-        // tray onto the cloth's bottom edge (counting as they land), the
-        // leftover tray buttons fade away, and only then Gogo delivers his line
+        // tray onto the cloth's bottom edge, the leftover tray buttons fade
+        // away, and only then Gogo delivers his line. A CORRECT guess saves
+        // the counting for after "Hurray!" (the success count-off); a wrong
+        // one counts in flight so the child sees where their guess landed.
         run = run.then(function (g) {
+          var good = g.count === spans;
           return measureFromTray(s, g, {
-            unit: HW, vert: false,
+            unit: HW, vert: false, nums: !good,
             slotAt: function (i) { return { left: TRACK_X0 + i * HW, top: HAND_TOP }; },
             numAt: function (i) { return { left: TRACK_X0 + i * HW + HW / 2, top: HAND_TOP + HW + 6 }; }
           }).then(function () { return g.clearRest(); })
             .then(function () { if (panel) { panel.remove(); panel = null; } return FX.wait(300); })
             .then(function () {
-              if (g.count === spans) {
+              if (good) {
                 FX.celebrate();
-                return h.tapToContinue(feedback(s, 'success', ['Hurray!', 'This cloth is ' + spans + ' handspans wide.']))
+                // "Hurray!" -> the placed hands COUNT OFF -> "...N handspans wide."
+                var countMs = countOff(s, spans, function (i) {
+                  return { left: TRACK_X0 + i * HW + HW / 2, top: HAND_TOP + HW + 6 };
+                }, { clap: true });
+                return h.tapToContinue(feedback(s, 'success', ['Hurray!', 'This cloth is ' + spans + ' handspans wide.'], { holdFirst: countMs }))
                   .then(function () { opts.onDone(); });
               }
               A.playWrong();
@@ -2253,17 +2392,12 @@ HS.Rounds = (function () {
         var layer = buildStage(s);
         placeRow(layer, 'solid', null, true);
         // the clue COUNTS the row: 1..N circles pop in one by one BELOW the
-        // hands, so the child reads the answer straight off the screen
-        for (var i = 0; i < spans; i++) {
-          var num = el('div.track-num track-num--pop', { text: String(i + 1) });
-          Object.assign(num.style, {
-            position: 'absolute', left: (TRACK_X0 + i * HW + HW / 2) + 'px',
-            top: (HAND_TOP + HW + 6) + 'px',
-            animationDelay: (0.45 + i * 0.28) + 's'
-          });
-          layer.appendChild(num);
-        }
-        var readWait = feedback(s, 'clue', 'Here is a clue.');
+        // hands, so the child reads the answer straight off the screen;
+        // the arrow holds until BOTH the line is read and the count is done
+        var countMs = countOff(layer, spans, function (i) {
+          return { left: TRACK_X0 + i * HW + HW / 2, top: HAND_TOP + HW + 6 };
+        });
+        var readWait = Math.max(feedback(s, 'clue', 'Here is a clue.'), countMs);
         return h.tapToContinue(readWait).then(function () { guessScreen(true); });
       });
     }
@@ -2275,6 +2409,7 @@ HS.Rounds = (function () {
     finaleScreen(config, h, {
       bg: 'cloth',
       vignette: false,   // keep the Bgm2 cloth room plain
+      storyLine: 'We need a tablecloth that is ' + CLOTH_TARGET + ' handspans long.',
       items: CLOTHS.map(function (a) {
         var wrap = clothImg(a, 22 * a.spans);
         return { spans: a.spans, node: wrap, wrapW: wrap._imgW, advW: wrap._imgW, rise: wrap._imgH };

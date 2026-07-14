@@ -17,6 +17,8 @@
  *   HS.Audio.playWhoosh()
  *   HS.Audio.playSparkle()
  *   HS.Audio.playDialogue()
+ *   HS.Audio.playVO(text)    -> speak the recorded Gogo/Tara line for an
+ *                               on-screen text box (SFX duck underneath)
  * ========================================================================== */
 window.HS = window.HS || {};
 
@@ -65,7 +67,8 @@ HS.Audio = (function () {
       o.start(); o.stop(c.currentTime + 0.02);
     } catch (e) { /* no-op */ }
     unlocked = true;
-    loadFiles(); // attempt (and fail gracefully) to fetch real audio
+    loadFiles();  // attempt (and fail gracefully) to fetch real audio
+    preloadVO();  // warm the Gogo/Tara voice lines
   }
 
   /* ---- optional file loading (best-effort) ------------------------------ */
@@ -195,6 +198,145 @@ HS.Audio = (function () {
     note({ type: 'sine', f0: 600, f1: 520, dur: 0.10, gain: 0.12 });
   }
 
+  /* ---- VOICE-OVERS (Gogo + Tara) ----------------------------------------
+   * Recorded lines live in audios/Gogo + audios/Tara. Every text box calls
+   * playVO(<its exact on-screen text>); the map below normalizes the text
+   * (lowercase, punctuation stripped) and picks the file. Rules:
+   *   - one voice at a time: a new VO cuts the previous one off
+   *   - while a voice speaks, EVERY SFX channel is DUCKED (the synth master
+   *     bus and the ogg <audio> effects) so the voice never fights the
+   *     clap / celebrate chime / wrong-buzz firing on the same beat; the
+   *     levels restore the moment the line ends
+   *   - array entries are alternate takes, cycled so a repeated line
+   *     ("Here?", "No!") doesn't sound like a stuck record
+   *   - an unmapped line falls back to the old dialogue blip, so a missing
+   *     recording never leaves a bubble silent */
+  var VO_DUCK = 0.22;      // synth master gain while a voice is speaking
+  var VO_DUCK_EL = 0.25;   // ogg <audio> SFX volume while a voice is speaking
+  var SFX_VOL = 0.9;       // normal level for both, restored after the line
+  function voKey(text) {
+    return String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+  var G = 'audios/Gogo/', T = 'audios/Tara/';
+  var VO_FILES = {
+    /* --- intro + tutorial showcase --- */
+    'welcome to the hall of helpful things': G + 'Welcome to the hall of helpful things.ogg',
+    'here are the tables': G + 'Here are the tables.ogg',
+    'let s measure how long each table is': G + 'Let us measure how long each table is.ogg',
+    'tap to select this table': G + 'Tap to select this table.ogg',
+    /* --- guided drag lesson --- */
+    'we need to measure the table using handspans': G + 'We need to measure the table using handspans.ogg',
+    'but how': G + 'but how.ogg',
+    'let us drag the first handspan': G + 'Let us drag the first handspan.ogg',
+    'here': [G + 'here.ogg', G + 'heree.ogg'],
+    'no': [G + 'no.ogg', G + 'noo.ogg'],
+    'we must start from one end of the table': G + 'We must start from one end of the table.ogg',
+    'let us drag the next handspan': G + 'Let us drag the next handspan.ogg',
+    'handspans must not overlap': G + 'No! Handspans must not overlap.ogg',
+    'then can we keep it here': [G + 'Then can we keep it here.ogg', G + 'Then can we keep it heree.ogg'],
+    // cropped from the "Then can we keep it here" takes (leading "Then" cut)
+    'can we keep it here': [G + 'Can we keep it here.ogg', G + 'Can we keep it heree.ogg'],
+    'there must be no gap between two handspans': G + 'No There must not be any gap between two handspans.ogg',
+    // the "Yes That is the perfect way" recording is SPLIT in two, matching
+    // the two on-screen bubbles ("Yes!" -> "That's the perfect way!")
+    'yes': G + 'Yes.ogg',
+    'that s the perfect way': G + 'That is the perfect way.ogg',
+    'no gaps no overlaps': G + 'No Gaps No Overlaps.ogg',
+    'now you try': G + 'Now you try.ogg',
+    'drag the rest with no gaps': G + 'Drag the rest with no gaps.ogg',
+    /* --- task panels --- */
+    'find how long the table is': G + 'Find how long the table is.ogg',
+    'find how tall the candle is': G + 'Find how tall the candle is.ogg',
+    'guess how many handspans tall the candle stand is': G + 'Guess how many handspans tall the candle stand is.ogg',
+    'guess how long the tablecloth is': G + 'Guess how long the tablecloth is.ogg',
+    /* --- success / wrong / clue feedback --- */
+    'well done': G + 'Well done.ogg',
+    'hurray': G + 'Hooray.ogg',
+    'let us try again': G + 'let us try again.ogg',
+    'here is a clue': G + 'here is a clue.ogg',
+    'the table is 5 handspans long': G + 'The table is 5 handspans long.ogg',
+    'the table is 6 handspans long': G + 'The table is 6 handspans long.ogg',
+    'the table is 8 handspans long': G + 'The table is 8 handspans long.ogg',
+    'the candle is 2 handspans tall': G + 'The candle is 2 handspans tall.ogg',
+    'the candle is 3 handspans tall': G + 'The candle is 3 handspans tall.ogg',
+    'the candle is 4 handspans tall': G + 'The candle is 4 handspans tall.ogg',
+    'this stand is 3 handspans tall': G + 'The candle stand is 3 handspans tall.ogg',
+    'this stand is 5 handspans tall': G + 'The candle stand is 5 handspans tall.ogg',
+    'this stand is 6 handspans tall': G + 'The candle stand is 6 handspans tall.ogg',
+    'this cloth is 7 handspans wide': G + 'The tablecloth is 7 handspans long.ogg',
+    'this cloth is 8 handspans wide': G + 'The tablecloth is 8 handspans long.ogg',
+    'this cloth is 10 handspans wide': G + 'The tablecloth is 10 handspans long.ogg',
+    /* --- flow intros (no recordings exist yet for the candle-stand pair:
+     *     "Here are the candle stands." / "Let's measure how tall each candle
+     *     stand is." — those fall back to the dialogue blip) --- */
+    'here are the candles': G + 'Here are the candles.ogg',
+    'let s measure how tall each candle is': G + 'Let us measure how tall each candle is.ogg',
+    'here are the tablecloths': G + 'Here are the tablecloths.ogg',
+    'let s measure how long each tablecloth is': G + 'Let us measure how long each tablecloth is.ogg',
+    /* --- finale story (Tara) + end screen --- */
+    'we need a table that is 6 handspans long': T + 'We need a table that is 6 handspans long.ogg',
+    'we need a candle that is 3 handspans tall': T + 'We need a candle that is 3 handspans tall.ogg',
+    'we need a candle stand that is 5 handspans tall': T + 'We need a candle stand that is 5 handspans tall.ogg',
+    'we need a tablecloth that is 8 handspans long': T + 'We need a tablecloth that is 8 handspans long.ogg',
+    'you did it': G + 'Yay! You did it!.ogg'
+  };
+  var voCache = {};      // file -> <audio> element
+  var voTakes = {};      // key -> next alternate-take index
+  var voCurrent = null;  // the <audio> element speaking right now
+
+  function voEl(file) {
+    var a = voCache[file];
+    if (!a) {
+      a = new Audio(file);
+      a.preload = 'auto';
+      voCache[file] = a;
+    }
+    return a;
+  }
+  function voActive() { return !!(voCurrent && !voCurrent.paused && !voCurrent.ended); }
+  // duck / restore every SFX channel under the voice (live elements too)
+  function duckSFX(on) {
+    if (master && ctx) master.gain.setTargetAtTime(on ? VO_DUCK : SFX_VOL, ctx.currentTime, 0.05);
+    [lightsOnEl, handPlaceEl, clapEl].forEach(function (a) { if (a) a.volume = on ? VO_DUCK_EL : SFX_VOL; });
+  }
+  function sfxLevel() { return voActive() ? VO_DUCK_EL : SFX_VOL; }
+  function voDone() { if (!voActive()) duckSFX(false); }
+  function playVO(text) {
+    if (muted) return;
+    var key = voKey(text);
+    var entry = VO_FILES[key];
+    if (!entry) { playDialogue(); return; }   // no recording: keep the old cue
+    var file = entry;
+    if (Array.isArray(entry)) {
+      var t = voTakes[key] || 0;
+      file = entry[t % entry.length];
+      voTakes[key] = t + 1;
+    }
+    try {
+      if (voCurrent) { voCurrent.pause(); voCurrent.currentTime = 0; }
+      var a = voEl(file);
+      if (!a._voWired) {
+        a._voWired = true;
+        a.addEventListener('ended', voDone);
+        a.addEventListener('error', voDone);
+        a.addEventListener('pause', voDone);   // covers being cut off by a newer VO
+      }
+      a.currentTime = 0;
+      a.volume = 1;
+      voCurrent = a;
+      duckSFX(true);
+      var p = a.play();
+      if (p && p.catch) p.catch(function () { playDialogue(); voDone(); });
+    } catch (e) { playDialogue(); voDone(); }
+  }
+  // warm the VO cache once audio is unlocked so the first line has no lag
+  function preloadVO() {
+    Object.keys(VO_FILES).forEach(function (k) {
+      var v = VO_FILES[k];
+      (Array.isArray(v) ? v : [v]).forEach(function (f) { try { voEl(f); } catch (e) { /* no-op */ } });
+    });
+  }
+
   // Bag-burst for the transition screen: a low "whoomph" impact, an airy poof,
   // and a bright ascending magic sparkle as the gifts + light fly out.
   function playBurst() {
@@ -221,8 +363,8 @@ HS.Audio = (function () {
       if (!lightsOnEl) {
         lightsOnEl = new Audio('assets/LighsOn.ogg');
         lightsOnEl.preload = 'auto';
-        lightsOnEl.volume = 0.9;
       }
+      lightsOnEl.volume = sfxLevel();   // ducked while a voice line speaks
       lightsOnEl.currentTime = 0;
       var p = lightsOnEl.play();
       if (p && p.catch) p.catch(function () { synthLightsOn(); });
@@ -247,8 +389,8 @@ HS.Audio = (function () {
       if (!handPlaceEl) {
         handPlaceEl = new Audio('assets/handPlaceSound.ogg');
         handPlaceEl.preload = 'auto';
-        handPlaceEl.volume = 0.9;
       }
+      handPlaceEl.volume = sfxLevel();   // ducked while a voice line speaks
       handPlaceEl.currentTime = 0;
       var p = handPlaceEl.play();
       if (p && p.catch) p.catch(function () {});
@@ -264,15 +406,18 @@ HS.Audio = (function () {
       if (!clapEl) {
         clapEl = new Audio('assets/clapSound.ogg');
         clapEl.preload = 'auto';
-        clapEl.volume = 0.9;
       }
+      clapEl.volume = sfxLevel();   // ducked while a voice line speaks
       clapEl.currentTime = 0;
       var p = clapEl.play();
       if (p && p.catch) p.catch(function () {});
     } catch (e) { /* no-op */ }
   }
 
-  function setMuted(v) { muted = !!v; }
+  function setMuted(v) {
+    muted = !!v;
+    if (muted && voCurrent) { voCurrent.pause(); voCurrent.currentTime = 0; }
+  }
 
   return {
     unlock: unlock,
@@ -284,6 +429,7 @@ HS.Audio = (function () {
     playWhoosh: playWhoosh,
     playSparkle: playSparkle,
     playDialogue: playDialogue,
+    playVO: playVO,
     playBurst: playBurst,
     playHandPlace: playHandPlace,
     playLightsOn: playLightsOn,

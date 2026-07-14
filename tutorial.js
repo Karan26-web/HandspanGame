@@ -24,7 +24,7 @@ HS.Tutorial = (function () {
 
   // same brown artwork as every table; cards are sized by span count so a
   // longer table genuinely looks longer (matches the Hall carousel).
-  var TABLE_SRC = 'assets/Table.png';
+  var TABLE_SRC = 'assets/Table.webp';
   var TABLE_RATIO = 350 / 662;
   var CARD_E0 = 0.0375, CARD_E1 = 0.9542;         // outer leg-foot fractions
   function cardWidth(spans) { return (50 * spans) / (CARD_E1 - CARD_E0); }
@@ -51,7 +51,7 @@ HS.Tutorial = (function () {
     var b = UI.SayBubble(text, 'left');
     Object.assign(b.style, bubblePos(pose));
     s.appendChild(b);
-    A.playDialogue();
+    A.playVO(text);
     // no Next button here — the line holds for its reading time, then the
     // flow moves on by itself
     return FX.wait(h.readMs(text) + 600).then(function () { b.remove(); });
@@ -153,7 +153,7 @@ HS.Tutorial = (function () {
         var b = UI.SayBubble('Tap to select this table.', 'left');
         Object.assign(b.style, bubblePos('horizontal'));
         s.appendChild(b);
-        A.playDialogue();
+        A.playVO('Tap to select this table.');
 
         var nudge = UI.HandNudge();
         nudge.classList.add('hand-nudge--tap');
