@@ -132,11 +132,21 @@ html, body {
 .boot {
   position: fixed; inset: 0; z-index: 200;
   display: flex; align-items: flex-start; justify-content: center;
-  padding-top: 46vh;                  /* sit just below the "Measure the Magic" ribbon */
-  background: #160d28 url('assets/PreLBD.webp') center center / cover no-repeat;
+  padding-top: 62vh;                  /* below "The Handspan Challenge" title, above the floor */
+  background: #160d28 url('assets/Start2.webp') center center / cover no-repeat;
 }
 .boot.hidden { display: none; }
 .boot__card { text-align: center; animation: float-bob 3.6s ease-in-out infinite; }
+/* Gogo with his sack, hovering genie-style on the right of the title art */
+.boot__gogo {
+  /* vertically centred via margin (not translate: the float-bob keyframes
+     own `transform`, and would snap a translateY centring away) */
+  position: absolute; right: 0vw; top: 50%; margin-top: -31vh;
+  height: 62vh; width: auto;
+  filter: drop-shadow(0 14px 20px rgba(0, 0, 0, 0.35));
+  animation: float-bob 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
 @keyframes float-bob { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-12px);} }
 /* circular play button (PlayButton orb artwork) */
 .boot__btn {
