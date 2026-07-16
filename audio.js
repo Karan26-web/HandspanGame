@@ -19,6 +19,8 @@
  *   HS.Audio.playDialogue()
  *   HS.Audio.playVO(text)    -> speak the recorded Gogo/Tara line for an
  *                               on-screen text box (SFX duck underneath)
+ *   HS.Audio.playBgm()       -> (re)start the looping music bed; unlock()
+ *                               already calls it, so the bed runs on its own
  * ========================================================================== */
 window.HS = window.HS || {};
 
@@ -69,6 +71,7 @@ HS.Audio = (function () {
     unlocked = true;
     loadFiles();  // attempt (and fail gracefully) to fetch real audio
     preloadVO();  // warm the Gogo/Tara voice lines
+    playBgm();    // start the music bed while still inside the user gesture
   }
 
   /* ---- optional file loading (best-effort) ------------------------------ */
@@ -222,7 +225,7 @@ HS.Audio = (function () {
     /* --- intro + tutorial showcase --- */
     'welcome to the hall of helpful things': G + 'Welcome to the hall of helpful things.ogg',
     'here are the tables': G + 'Here are the tables.ogg',
-    'let s measure how long each table is': G + 'Let us measure how long each table is.ogg',
+    'let us measure how long each table is': G + 'Let us measure how long each table is.ogg',
     'tap to select this table': G + 'Tap to select this table.ogg',
     /* --- guided drag lesson --- */
     'we need to measure the table using handspans': G + 'We need to measure the table using handspans.ogg',
@@ -232,21 +235,23 @@ HS.Audio = (function () {
     'no': [G + 'no.ogg', G + 'noo.ogg'],
     'we must start from one end of the table': G + 'We must start from one end of the table.ogg',
     'let us drag the next handspan': G + 'Let us drag the next handspan.ogg',
-    'handspans must not overlap': G + 'No! Handspans must not overlap.ogg',
+    // trimmed from the "No! ..." master takes (leading "No" cut — the "No!"
+    // bubble right before each rule line already speaks its own no.ogg)
+    'handspans must not overlap': G + 'Handspans must not overlap.ogg',
     'then can we keep it here': [G + 'Then can we keep it here.ogg', G + 'Then can we keep it heree.ogg'],
     // cropped from the "Then can we keep it here" takes (leading "Then" cut)
     'can we keep it here': [G + 'Can we keep it here.ogg', G + 'Can we keep it heree.ogg'],
-    'there must be no gap between two handspans': G + 'No There must not be any gap between two handspans.ogg',
+    'there must be no gap between two handspans': G + 'There must be no gap between two handspans.ogg',
     // the "Yes That is the perfect way" recording is SPLIT in two, matching
-    // the two on-screen bubbles ("Yes!" -> "That's the perfect way!")
+    // the two on-screen bubbles ("Yes!" -> "That is the perfect way.")
     'yes': G + 'Yes.ogg',
-    'that s the perfect way': G + 'That is the perfect way.ogg',
+    'that is the perfect way': G + 'That is the perfect way.ogg',
     'no gaps no overlaps': G + 'No Gaps No Overlaps.ogg',
     'now you try': G + 'Now you try.ogg',
     'drag the rest with no gaps': G + 'Drag the rest with no gaps.ogg',
     /* --- task panels --- */
-    'find how long the table is': G + 'Find how long the table is.ogg',
-    'find how tall the candle is': G + 'Find how tall the candle is.ogg',
+    'measure how long the table is': G + 'Measure how long the table is.ogg',
+    'measure how tall the candle is': G + 'Measure how tall the candle is.ogg',
     'guess how many handspans tall the candle stand is': G + 'Guess how many handspans tall the candle stand is.ogg',
     'guess how long the tablecloth is': G + 'Guess how long the tablecloth is.ogg',
     /* --- success / wrong / clue feedback --- */
@@ -267,12 +272,12 @@ HS.Audio = (function () {
     'this cloth is 8 handspans wide': G + 'The tablecloth is 8 handspans long.ogg',
     'this cloth is 10 handspans wide': G + 'The tablecloth is 10 handspans long.ogg',
     /* --- flow intros (no recordings exist yet for the candle-stand pair:
-     *     "Here are the candle stands." / "Let's measure how tall each candle
+     *     "Here are the candle stands." / "Let us measure how tall each candle
      *     stand is." — those fall back to the dialogue blip) --- */
     'here are the candles': G + 'Here are the candles.ogg',
-    'let s measure how tall each candle is': G + 'Let us measure how tall each candle is.ogg',
+    'let us measure how tall each candle is': G + 'Let us measure how tall each candle is.ogg',
     'here are the tablecloths': G + 'Here are the tablecloths.ogg',
-    'let s measure how long each tablecloth is': G + 'Let us measure how long each tablecloth is.ogg',
+    'let us measure how long each tablecloth is': G + 'Let us measure how long each tablecloth is.ogg',
     /* --- finale story (Tara) + end screen --- */
     'we need a table that is 6 handspans long': T + 'We need a table that is 6 handspans long.ogg',
     'we need a candle that is 3 handspans tall': T + 'We need a candle that is 3 handspans tall.ogg',
@@ -298,6 +303,7 @@ HS.Audio = (function () {
   function duckSFX(on) {
     if (master && ctx) master.gain.setTargetAtTime(on ? VO_DUCK : SFX_VOL, ctx.currentTime, 0.05);
     [lightsOnEl, handPlaceEl, clapEl].forEach(function (a) { if (a) a.volume = on ? VO_DUCK_EL : SFX_VOL; });
+    if (bgmEl) bgmEl.volume = on ? BGM_DUCK : BGM_VOL;
   }
   function sfxLevel() { return voActive() ? VO_DUCK_EL : SFX_VOL; }
   function voDone() { if (!voActive()) duckSFX(false); }
@@ -414,9 +420,30 @@ HS.Audio = (function () {
     } catch (e) { /* no-op */ }
   }
 
+  // Looping music bed (audios/Bgm.mp3) — starts on unlock (inside the Play-tap
+  // gesture, so autoplay policies allow it) and runs under every screen. The
+  // track is mastered hot (0 dB peaks, same mean level as the voice lines), so
+  // it sits LOW and drops further while Gogo/Tara speak (see duckSFX).
+  var BGM_VOL = 0.15, BGM_DUCK = 0.06;
+  var bgmEl = null;
+  function playBgm() {
+    if (muted) return;
+    try {
+      if (!bgmEl) {
+        bgmEl = new Audio('audios/Bgm.mp3');
+        bgmEl.loop = true;
+        bgmEl.preload = 'auto';
+      }
+      bgmEl.volume = voActive() ? BGM_DUCK : BGM_VOL;
+      var p = bgmEl.play();
+      if (p && p.catch) p.catch(function () { /* blocked: silent until next call */ });
+    } catch (e) { /* no-op */ }
+  }
+
   function setMuted(v) {
     muted = !!v;
     if (muted && voCurrent) { voCurrent.pause(); voCurrent.currentTime = 0; }
+    if (bgmEl) { if (muted) bgmEl.pause(); else playBgm(); }
   }
 
   return {
@@ -434,6 +461,7 @@ HS.Audio = (function () {
     playHandPlace: playHandPlace,
     playLightsOn: playLightsOn,
     playClap: playClap,
+    playBgm: playBgm,
     setMuted: setMuted
   };
 })();

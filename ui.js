@@ -485,7 +485,7 @@ HS.UI = (function () {
    * GOGO SPEAKS — unified instruction system
    * A Gogo character (posed by the KIND of line) plus a speech bubble whose
    * tail points AT that Gogo. Poses:
-   *   'think' -> ThinkGogo   (questions / pondering: "But How?", "Here?")
+   *   'think' -> ThinkGogo   (questions / pondering: "But how?", "Here?")
    *   'show'  -> ShowingGogo (pointing / instructing: "Tap here…", "Drag…")
    *   'talk'  -> gogo        (statements / celebration: "We need to…", "Yes!")
    *   'horizontal' -> HorizontalGogo (casual narration from the corner)

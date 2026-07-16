@@ -6,7 +6,7 @@
  *   2. THREE-TABLE SHOWCASE — the three tables sit in the selection carousel,
  *      HorizontalGogo introduces them:
  *        "Here are the tables."
- *        "Let's measure how long each table is."
+ *        "Let us measure how long each table is."
  *   3. FOCUS + SELECT — the tutorial (centre) table is brought into focus and
  *      the side tables blur (exactly like the real selection screen):
  *        "Tap here to select this table."   (player taps the centre table)
@@ -112,7 +112,7 @@ HS.Tutorial = (function () {
 
       var run = Promise.resolve();
       run = run.then(function () { return say(h, s, gogo, 'Here are the tables.', 'show'); });
-      run = run.then(function () { return say(h, s, gogo, "Let's measure how long each table is.", 'show'); });
+      run = run.then(function () { return say(h, s, gogo, "Let us measure how long each table is.", 'show'); });
 
       // ---- STEP 1: THE TABLES MOVE — the centre table comes FORWARD while the
       // side tables drift back into the background. VERY slow & readable.

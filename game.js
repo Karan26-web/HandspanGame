@@ -406,7 +406,7 @@ HS.Game = (function () {
     if (opts.sub) ov.appendChild(el('div.overlay__sub', { text: opts.sub }));
     scene().appendChild(ov);
     return new Promise(function (resolve) {
-      var btn = UI.Button('Try Again!', {
+      var btn = UI.Button('Try Again', {
         variant: 'play',
         onClick: function () { ov.remove(); resolve(); }
       });
