@@ -1212,20 +1212,27 @@ HS.Rounds = (function () {
       var ROW_CX = 810;     // row centred in the space right of the storytellers
       var GAP = 56;
       var items = opts.items.slice().sort(function (a, b) { return a.spans - b.spans; });
-      var totalW = items.reduce(function (a, it) { return a + it.advW; }, 0) + GAP * (items.length - 1);
-      var x = ROW_CX - totalW / 2;
       var targetItem = items[0];
       items.forEach(function (it) {
         if (it.spans === opts.target) targetItem = it;
         var card = el('div.finale-card');
         card.appendChild(it.node);
-        card.appendChild(el('div.hall-card__done', { text: it.spans + ' handspans' }));
-        // the row advances by the VISUAL width; the (possibly wider) box is
-        // centred on that slot, and every base sits on the same floor line
-        Object.assign(card.style, { left: (x + (it.advW - it.wrapW) / 2) + 'px', top: (FLOOR_Y - it.rise) + 'px' });
+        it._chip = el('div.hall-card__done', { text: it.spans + ' handspans' });
+        card.appendChild(it._chip);
         s.appendChild(card);
         it._card = card;
-        x += it.advW + GAP;
+      });
+      // The row advances by each item's VISUAL width — but never by less
+      // than its "N handspans" chip, so the chips under narrow objects
+      // (candles) can never run into each other. Chips are measured after
+      // the cards are in the DOM; the (possibly wider) box is centred on
+      // its slot, and every base sits on the same floor line.
+      items.forEach(function (it) { it._adv = Math.max(it.advW, it._chip.offsetWidth + 12); });
+      var totalW = items.reduce(function (a, it) { return a + it._adv; }, 0) + GAP * (items.length - 1);
+      var x = ROW_CX - totalW / 2;
+      items.forEach(function (it) {
+        Object.assign(it._card.style, { left: (x + (it._adv - it.wrapW) / 2) + 'px', top: (FLOOR_Y - it.rise) + 'px' });
+        x += it._adv + GAP;
       });
 
       // ---- the storytellers: the taragogo gif plays on the LEFT. If the
@@ -1251,6 +1258,27 @@ HS.Rounds = (function () {
       host.appendChild(gif);
       s.appendChild(host);
 
+      // The clip plays ONCE only: a gif can't be told to stop looping, so
+      // one full loop (2.23s) after it starts animating — i.e. after IT
+      // loads, not after the story beat begins — the img is swapped for a
+      // canvas snapshot of its first frame (which is also where the loop
+      // lands, so the freeze is seamless) and the storytellers hold that
+      // pose for the rest of the beat.
+      var GIF_LOOP_MS = 2230;
+      function freezeGif() {
+        if (!gif.parentNode) return;   // already gone (load fallback)
+        var cv = document.createElement('canvas');
+        cv.width = gif.naturalWidth; cv.height = gif.naturalHeight;
+        cv.getContext('2d').drawImage(gif, 0, 0);   // an animated img draws frame 1
+        cv.style.cssText = gif.style.cssText;
+        host.replaceChild(cv, gif);
+      }
+      if (gif.complete) {
+        if (gif.naturalWidth > 0) setTimeout(freezeGif, GIF_LOOP_MS);
+      } else {
+        gif.addEventListener('load', function () { setTimeout(freezeGif, GIF_LOOP_MS); });
+      }
+
       // Tara's story line — HER text box for the flow ("We need a ... that
       // is N handspans ...") beside the gif, voiced by her recording. The
       // gif itself is silent, so her voice carries the story.
@@ -1269,7 +1297,7 @@ HS.Rounds = (function () {
 
       // A gif has no 'ended' event or playback rate, so the beat is TIMED:
       // the old clip ran 2.25s at 0.55 rate ≈ 4.1s — the gif (2.23s/loop)
-      // loops underneath while the bubble + voice carry the story, keeping
+      // plays underneath while the bubble + voice carry the story, keeping
       // the finale's overall pacing exactly as it was.
       var STORY_MS = 4100;
       function playStory() {
@@ -1438,33 +1466,38 @@ HS.Rounds = (function () {
   /* ====================================================================== *
    * END
    * ====================================================================== */
-  function endScreen(config, h, sub) {
-    h.setBackground('play');   // back to the default room for the finale
+  // The game ends straight on the post-leaderboard "Well Done!" board —
+  // full-stage postLbd.png (Tara, the prince and Gogo under the banner) with
+  // the pulsing Next arrow (held back so the cheer lands first). Next
+  // restarts the game.
+  function endScreen(config, h) {
+    h.setBackground('play');
     h.transitionTo(function () {
       var s = h.scene();
+      var art = el('img', { src: 'assets/postLbd.png', alt: 'Well Done!', draggable: 'false' });
+      Object.assign(art.style, {
+        position: 'absolute', left: '0', top: '0',
+        width: '100%', height: '100%', objectFit: 'cover'
+      });
+      s.appendChild(art);
       FX.confetti({ count: 140 });
       A.playVO('You did it! 🎉');   // spoken first so the chime ducks under it
       A.playSuccess();
 
-      var col = el('div.center-col');
-      col.appendChild(el('div.overlay__title overlay__title--ok', { text: 'You did it! 🎉' }));
-      col.appendChild(el('div.overlay__sub', {
-        text: sub || ('You found the ' + state.target + '-handspan table.'), style: { color: '#fff' }
-      }));
-      col.appendChild(UI.Button('Play Again', { variant: 'play', onClick: function () { HS.Game.start(); } }));
-      s.appendChild(col);
-
-      var gogo = el('img.gogo-bag', { src: 'assets/gogoWbag.webp', alt: '', draggable: 'false' });
-      Object.assign(gogo.style, {
-        position: 'absolute', right: '50px', bottom: '10px', height: '400px', width: 'auto',
-        zIndex: '6', filter: 'drop-shadow(0 12px 16px rgba(0,0,0,0.35))'
-      });
-      s.appendChild(gogo);
-
       var trickle = setInterval(function () {
-        if (!document.body.contains(col)) { clearInterval(trickle); return; }
+        if (!document.body.contains(art)) { clearInterval(trickle); return; }
         FX.confetti({ count: 18 });
       }, 1400);
+
+      setTimeout(function () {
+        if (!document.body.contains(art)) return;
+        var btn = UI.NextButton();
+        btn.addEventListener('click', function () {
+          A.playClick();
+          HS.Game.start();
+        });
+        s.appendChild(btn);
+      }, 2200);
       return null;
     });
   }
@@ -2016,7 +2049,11 @@ HS.Rounds = (function () {
     var CX = 640;                // horizontal centre — EVERY stand's base is centred
                                  // here (the base is centred in the art), so the
                                  // standing x never shifts between rounds
-    var BASE_Y = 452;            // the base sits on the SAME floor line as the table flow
+    var BASE_Y = 520;            // shared floor line for all three stands, dropped low
+                                 // enough that the stand fills the space between the
+                                 // instruction panel and the guess tray (top ~600) —
+                                 // the tallest (6-span) stand's top guide still clears
+                                 // the panel (top line ~172 vs panel bottom ~95)
     // The hand column measures BESIDE the stand, never on top of it: it hugs
     // the stand's solid base edge (alpha-measured at 0.179 of the image width
     // per side) with a small gap, whatever the stand's size.
@@ -2143,7 +2180,7 @@ HS.Rounds = (function () {
               if (good) {
                 FX.celebrate();
                 // "Hurray!" -> CLAP -> "...N handspans tall."
-                return h.tapToContinue(feedback(s, 'success', ['Hurray!', 'This stand is ' + spans + ' handspans tall.'], { holdFirst: successClap() }))
+                return h.tapToContinue(feedback(s, 'success', ['Hurray!', 'The candle stand is ' + spans + ' handspans tall.'], { holdFirst: successClap() }))
                   .then(function () { document.getElementById('bg').classList.remove('tut-blur'); opts.onDone(); });
               }
               A.playWrong();
@@ -2190,7 +2227,7 @@ HS.Rounds = (function () {
       target: candleState.target,
       glow: 'candle--glow',
       // ... candle stands are the LAST round -> the grand finale
-      onDone: function () { endScreen(config, h, 'You found the ' + candleState.target + '-handspan candle stand.'); }
+      onDone: function () { endScreen(config, h); }
     });
   }
 
@@ -2377,8 +2414,8 @@ HS.Rounds = (function () {
             .then(function () {
               if (good) {
                 FX.celebrate();
-                // "Hurray!" -> CLAP -> "...N handspans wide."
-                return h.tapToContinue(feedback(s, 'success', ['Hurray!', 'This cloth is ' + spans + ' handspans wide.'], { holdFirst: successClap() }))
+                // "Hurray!" -> CLAP -> "...N handspans long."
+                return h.tapToContinue(feedback(s, 'success', ['Hurray!', 'The cloth is ' + spans + ' handspans long.'], { holdFirst: successClap() }))
                   .then(function () { opts.onDone(); });
               }
               A.playWrong();

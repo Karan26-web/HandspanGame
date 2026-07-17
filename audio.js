@@ -265,12 +265,12 @@ HS.Audio = (function () {
     'the candle is 2 handspans tall': G + 'The candle is 2 handspans tall.ogg',
     'the candle is 3 handspans tall': G + 'The candle is 3 handspans tall.ogg',
     'the candle is 4 handspans tall': G + 'The candle is 4 handspans tall.ogg',
-    'this stand is 3 handspans tall': G + 'The candle stand is 3 handspans tall.ogg',
-    'this stand is 5 handspans tall': G + 'The candle stand is 5 handspans tall.ogg',
-    'this stand is 6 handspans tall': G + 'The candle stand is 6 handspans tall.ogg',
-    'this cloth is 7 handspans wide': G + 'The tablecloth is 7 handspans long.ogg',
-    'this cloth is 8 handspans wide': G + 'The tablecloth is 8 handspans long.ogg',
-    'this cloth is 10 handspans wide': G + 'The tablecloth is 10 handspans long.ogg',
+    'the candle stand is 3 handspans tall': G + 'The candle stand is 3 handspans tall.ogg',
+    'the candle stand is 5 handspans tall': G + 'The candle stand is 5 handspans tall.ogg',
+    'the candle stand is 6 handspans tall': G + 'The candle stand is 6 handspans tall.ogg',
+    'the cloth is 7 handspans long': G + 'The tablecloth is 7 handspans long.ogg',
+    'the cloth is 8 handspans long': G + 'The tablecloth is 8 handspans long.ogg',
+    'the cloth is 10 handspans long': G + 'The tablecloth is 10 handspans long.ogg',
     /* --- flow intros (no recordings exist yet for the candle-stand pair:
      *     "Here are the candle stands." / "Let us measure how tall each candle
      *     stand is." — those fall back to the dialogue blip) --- */
