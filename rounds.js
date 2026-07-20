@@ -1111,7 +1111,11 @@ HS.Rounds = (function () {
           seq = seq.then(function () { A.playWhoosh(); glidePointGogo(GAP_CX, 950); return moveTo(hand2, GAP, HAND_TOP, 950); });
           seq = seq.then(function () { return FX.wait(500); });
           seq = seq.then(function () { return demoLine('Then can we keep it here?', 3000, null, pointBubbleAt(GAP_CX)); });
-          seq = seq.then(function () { return noHere(GAP_CX); });
+          // NB: no noHere("No!") here (unlike the overlap spot above). This rule
+          // line ITSELF speaks "no" ("There must be NO gap…"), so a preceding
+          // spoken "No!" made the child hear a doubled "No". The sentence is the
+          // correction. (The overlap line keeps its "No!" — "Handspans must not
+          // overlap" has no "no" of its own.)
           seq = seq.then(function () { return demoLine('There must be no gap between two handspans.', 3600, null, pointBubbleAt(GAP_CX)); });
           seq = seq.then(function () { return FX.wait(1600); });
           seq = seq.then(function () { A.playWhoosh(); glidePointGogo(L1_CX, 850); return moveTo(hand2, L1, HAND_TOP, 850); });
@@ -1258,47 +1262,59 @@ HS.Rounds = (function () {
       host.appendChild(gif);
       s.appendChild(host);
 
-      // The clip plays ONCE only: a gif can't be told to stop looping, so
-      // one full loop (2.23s) after it starts animating — i.e. after IT
-      // loads, not after the story beat begins — the img is swapped for a
-      // canvas snapshot of its first frame (which is also where the loop
-      // lands, so the freeze is seamless) and the storytellers hold that
-      // pose for the rest of the beat.
+      // The clip plays ONCE only: a gif can't be told to stop looping, so once
+      // it has played through we swap it for a STILL and hold that pose for the
+      // rest of the beat. The gif's loop LANDS on its opening frame — where Tara
+      // holds NO scroll — so a canvas snapshot at loop-end would freeze on the
+      // closed pose while she is still reading. Instead we hold a pre-rendered
+      // still of the OPEN-scroll frame, so the scroll stays open the whole time
+      // her line is spoken. The swap happens a beat BEFORE the loop restarts, so
+      // it goes open-scroll -> open-scroll with no closed-pose flash. Falls back
+      // to a canvas snapshot if the still asset is missing.
       var GIF_LOOP_MS = 2230;
+      var FREEZE_MS = 2000;                              // swap while an open frame shows
+      var openStill = el('img', { src: 'assets/taragogoOpen.webp', alt: '', draggable: 'false' });
+      openStill.style.cssText = gif.style.cssText;       // same size/offset as the gif
       function freezeGif() {
         if (!gif.parentNode) return;   // already gone (load fallback)
+        if (openStill.complete && openStill.naturalWidth > 0) {
+          host.replaceChild(openStill, gif);
+          return;
+        }
+        // asset unavailable: best-effort canvas snapshot of the current frame
         var cv = document.createElement('canvas');
         cv.width = gif.naturalWidth; cv.height = gif.naturalHeight;
-        cv.getContext('2d').drawImage(gif, 0, 0);   // an animated img draws frame 1
+        try { cv.getContext('2d').drawImage(gif, 0, 0); } catch (e) { /* no-op */ }
         cv.style.cssText = gif.style.cssText;
         host.replaceChild(cv, gif);
       }
       if (gif.complete) {
-        if (gif.naturalWidth > 0) setTimeout(freezeGif, GIF_LOOP_MS);
+        if (gif.naturalWidth > 0) setTimeout(freezeGif, FREEZE_MS);
       } else {
-        gif.addEventListener('load', function () { setTimeout(freezeGif, GIF_LOOP_MS); });
+        gif.addEventListener('load', function () { setTimeout(freezeGif, FREEZE_MS); });
       }
 
       // Tara's story line — HER text box for the flow ("We need a ... that
       // is N handspans ...") beside the gif, voiced by her recording. The
       // gif itself is silent, so her voice carries the story.
       var storyBubble = null;
+      // returns the VO promise so the beat can hold until Tara's line REALLY ends
       function showStory() {
-        if (!opts.storyLine || storyBubble) return;
+        if (!opts.storyLine || storyBubble) return Promise.resolve();
         storyBubble = UI.SayBubble(opts.storyLine, 'left');
         // BOTTOM-anchored just above Tara's head (she stands on the gif's
         // right side), tail-left dipping to her crown — the bubble grows
         // upward so longer lines never drift down over the characters
         Object.assign(storyBubble.style, { left: '290px', bottom: '440px', zIndex: '13' });
         s.appendChild(storyBubble);
-        A.playVO(opts.storyLine);
+        return A.playVO(opts.storyLine);
       }
       function hideStory() { if (storyBubble) { storyBubble.remove(); storyBubble = null; } }
 
-      // A gif has no 'ended' event or playback rate, so the beat is TIMED:
-      // the old clip ran 2.25s at 0.55 rate ≈ 4.1s — the gif (2.23s/loop)
-      // plays underneath while the bubble + voice carry the story, keeping
-      // the finale's overall pacing exactly as it was.
+      // The bubble holds until Tara's LINE actually ends (playVO resolves on its
+      // real end) OR-ed with a minimum, so it never vanishes mid-sentence — the
+      // recorded lines run 4.3–5.6s, longer than the old fixed 4.1s guess. The
+      // gif underneath is silent; STORY_MS is just the floor.
       var STORY_MS = 4100;
       function playStory() {
         return new Promise(function (resolve) {
@@ -1310,7 +1326,8 @@ HS.Rounds = (function () {
             host._gone = true; host.remove();
             resolve();
           }
-          function begin() { showStory(); setTimeout(done, STORY_MS); }
+          // hold for the longer of the spoken line and the floor, then move on
+          function begin() { Promise.all([showStory(), FX.wait(STORY_MS)]).then(done); }
           // a missing file may have failed DURING the intro beat, before these
           // listeners attach — so check the load state, don't just listen
           gif.addEventListener('error', fallback);
@@ -1322,6 +1339,11 @@ HS.Rounds = (function () {
       }
 
       var run = FX.wait(1600);   // a calm look at the line-up first
+      // don't chop off a success line that's still finishing (e.g. Gogo's "The
+      // cloth is N handspans long." from the round just before) — let it end,
+      // THEN Tara speaks. Otherwise the near-identical lines sounded like one
+      // line was cut and then replayed a couple of seconds later.
+      run = run.then(function () { return A.whenVOIdle(5000); });
       // 1. the storytellers tell it (beat skipped silently if the clip is absent)
       run = run.then(playStory);
       run = run.then(function () { return FX.wait(1200); });   // let the story sink in

@@ -298,7 +298,71 @@ HS.Audio = (function () {
     }
     return a;
   }
+  // Which file a line will use RIGHT NOW — peek only, does not advance the
+  // alternate-take cursor (playVO does that). '' when the line has no recording.
+  function voFileFor(text) {
+    var entry = VO_FILES[voKey(text)];
+    if (!entry) return '';
+    if (Array.isArray(entry)) return entry[(voTakes[voKey(text)] || 0) % entry.length];
+    return entry;
+  }
+  // Resolve once the line is decoded enough to start instantly (or a short
+  // safety timeout). Callers use this to reveal a text panel IN STEP with the
+  // voice — no first-line lag — without ever hanging the game on a slow file.
+  function whenReady(text) {
+    var file = voFileFor(text);
+    if (!file) return Promise.resolve();
+    var a = voEl(file);
+    if (a.readyState >= 3) return Promise.resolve();   // HAVE_FUTURE_DATA: good to go
+    return new Promise(function (resolve) {
+      var done = false;
+      function ok() {
+        if (done) return; done = true;
+        a.removeEventListener('canplaythrough', ok);
+        a.removeEventListener('canplay', ok);
+        a.removeEventListener('loadeddata', ok);
+        a.removeEventListener('error', ok);
+        resolve();
+      }
+      a.addEventListener('canplaythrough', ok);
+      a.addEventListener('canplay', ok);
+      a.addEventListener('loadeddata', ok);
+      a.addEventListener('error', ok);
+      try { a.load(); } catch (e) { /* no-op */ }
+      setTimeout(ok, 1500);   // safety: never block the intro on a stubborn decode
+    });
+  }
+  // Decoded length (seconds) of the line a text will speak, or 0 if unknown /
+  // not yet loaded. Used to pace an on-screen word reveal to the voice.
+  function voDuration(text) {
+    var file = voFileFor(text);
+    if (!file) return 0;
+    var a = voEl(file);
+    return (isFinite(a.duration) && a.duration > 0) ? a.duration : 0;
+  }
   function voActive() { return !!(voCurrent && !voCurrent.paused && !voCurrent.ended); }
+  // Resolve once no voice line is speaking (or after a safety cap). Lets a
+  // caller start a NEW line without cutting one that is still finishing — e.g.
+  // the finale waits for Gogo's success line to end before Tara reads her line,
+  // instead of chopping it off (which sounded like the line was replayed).
+  function whenVOIdle(maxWaitMs) {
+    if (!voActive()) return Promise.resolve();
+    var a = voCurrent;
+    return new Promise(function (resolve) {
+      var done = false;
+      function ok() {
+        if (done) return; done = true;
+        a.removeEventListener('ended', ok);
+        a.removeEventListener('error', ok);
+        a.removeEventListener('pause', ok);
+        resolve();
+      }
+      a.addEventListener('ended', ok);
+      a.addEventListener('error', ok);
+      a.addEventListener('pause', ok);   // also fires if something else cuts it
+      setTimeout(ok, maxWaitMs || 5000);
+    });
+  }
   // duck / restore every SFX channel under the voice (live elements too)
   function duckSFX(on) {
     if (master && ctx) master.gain.setTargetAtTime(on ? VO_DUCK : SFX_VOL, ctx.currentTime, 0.05);
@@ -307,33 +371,61 @@ HS.Audio = (function () {
   }
   function sfxLevel() { return voActive() ? VO_DUCK_EL : SFX_VOL; }
   function voDone() { if (!voActive()) duckSFX(false); }
+  // playVO returns a Promise that RESOLVES WHEN THE LINE FINISHES (ends, errors,
+  // or is cut off by a newer VO). Callers that must stay in step with the voice
+  // (e.g. the welcome panel) await this instead of guessing with a fixed timer,
+  // so the text and the voice can never drift apart or get cut mid-sentence.
   function playVO(text) {
-    if (muted) return;
+    if (muted) return Promise.resolve();
     var key = voKey(text);
     var entry = VO_FILES[key];
-    if (!entry) { playDialogue(); return; }   // no recording: keep the old cue
+    if (!entry) { playDialogue(); return Promise.resolve(); }   // no recording: keep the old cue
     var file = entry;
     if (Array.isArray(entry)) {
       var t = voTakes[key] || 0;
       file = entry[t % entry.length];
       voTakes[key] = t + 1;
     }
-    try {
-      if (voCurrent) { voCurrent.pause(); voCurrent.currentTime = 0; }
-      var a = voEl(file);
-      if (!a._voWired) {
-        a._voWired = true;
-        a.addEventListener('ended', voDone);
-        a.addEventListener('error', voDone);
-        a.addEventListener('pause', voDone);   // covers being cut off by a newer VO
+    // The returned promise is GUARANTEED to settle exactly once — on natural
+    // end, on error, when a newer line cuts this one (pause), when play() is
+    // rejected, or via a hard duration-based safety net. A caller awaiting this
+    // (the welcome panel) can therefore never get stuck on a silent frame.
+    return new Promise(function (resolve) {
+      var a, guard, settled = false;
+      function finish() {
+        if (settled) return;
+        settled = true;
+        if (guard) clearTimeout(guard);
+        if (a) {
+          a.removeEventListener('ended', finish);
+          a.removeEventListener('error', finish);
+          a.removeEventListener('pause', finish);
+        }
+        resolve();
       }
-      a.currentTime = 0;
-      a.volume = 1;
-      voCurrent = a;
-      duckSFX(true);
-      var p = a.play();
-      if (p && p.catch) p.catch(function () { playDialogue(); voDone(); });
-    } catch (e) { playDialogue(); voDone(); }
+      try {
+        if (voCurrent) { voCurrent.pause(); voCurrent.currentTime = 0; }
+        a = voEl(file);
+        if (!a._voWired) {
+          a._voWired = true;
+          a.addEventListener('ended', voDone);
+          a.addEventListener('error', voDone);
+          a.addEventListener('pause', voDone);   // covers being cut off by a newer VO
+        }
+        a.addEventListener('ended', finish);
+        a.addEventListener('error', finish);
+        a.addEventListener('pause', finish);     // resolves if a newer line cuts this one
+        a.currentTime = 0;
+        a.volume = 1;
+        voCurrent = a;
+        duckSFX(true);
+        var p = a.play();
+        if (p && p.catch) p.catch(function () { playDialogue(); voDone(); finish(); });
+        // hard safety net: settle even if no media event ever fires
+        var dur = (isFinite(a.duration) && a.duration > 0) ? a.duration : 8;
+        guard = setTimeout(finish, (dur + 1.5) * 1000);
+      } catch (e) { playDialogue(); voDone(); finish(); }
+    });
   }
   // warm the VO cache once audio is unlocked so the first line has no lag
   function preloadVO() {
@@ -457,6 +549,9 @@ HS.Audio = (function () {
     playSparkle: playSparkle,
     playDialogue: playDialogue,
     playVO: playVO,
+    whenReady: whenReady,
+    whenVOIdle: whenVOIdle,
+    voDuration: voDuration,
     playBurst: playBurst,
     playHandPlace: playHandPlace,
     playLightsOn: playLightsOn,

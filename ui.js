@@ -356,12 +356,15 @@ HS.UI = (function () {
   // who: 'gogo' | 'child'
   // Fill a text node with per-word spans that pop in ONE BY ONE (staggered CSS
   // animation) so dialogue reads dynamically instead of appearing all at once.
-  function fillWords(node, text) {
+  // stagger = seconds between each word popping in (default 0.11). Callers that
+  // need the words to keep pace with a voice line pass a larger value.
+  function fillWords(node, text, stagger) {
+    if (stagger == null) stagger = 0.11;
     UI_clearNode(node);
     String(text || '').split(/\s+/).forEach(function (w, i) {
       if (!w) return;
       var sp = el('span.word-in', { text: w });
-      sp.style.animationDelay = (i * 0.11) + 's';
+      sp.style.animationDelay = (i * stagger) + 's';
       node.appendChild(sp);
       node.appendChild(document.createTextNode(' '));
     });
@@ -408,8 +411,8 @@ HS.UI = (function () {
   // Welcome dialogue: the Figma DialogueBox (say-bubble) with its swoosh tail
   // aimed down-left at the genie's head, so it reads as Gogo speaking rather
   // than an instruction panel.
-  function WelcomePanel(text) {
-    var b = SayBubble(text, 'left');
+  function WelcomePanel(text, stagger) {
+    var b = SayBubble(text, 'left', stagger);
     b.classList.add('say-bubble--welcome');
     return b;
   }
@@ -546,10 +549,10 @@ HS.UI = (function () {
   // tail: 'down-right' (bubble ABOVE a right-anchored Gogo) | 'left' (bubble to
   // the RIGHT of a left-anchored Gogo) | 'right' (mirrored: bubble to the LEFT
   // of a right-anchored Gogo, tail on his head).
-  function SayBubble(text, tail) {
+  function SayBubble(text, tail, stagger) {
     var kind = tail || 'down-right';
     var b = el('div.say-bubble say-bubble--' + kind);
-    var txt = fillWords(el('div.say-bubble__text'), text);
+    var txt = fillWords(el('div.say-bubble__text'), text, stagger);
     b.appendChild(txt);
     snugBubble(b, txt);
     var t = el('div.say-bubble__tail');

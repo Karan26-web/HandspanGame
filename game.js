@@ -492,13 +492,32 @@ HS.Game = (function () {
       Object.assign(genie.style, { left: '362px', top: '78px', width: '520px', zIndex: '10' });
       s.appendChild(genie);
 
-      // no Next button on the welcome screen — the panel holds for its
-      // reading time and the flow moves on by itself
+      // No Next button on the welcome screen. To keep the WORDS and the VOICE in
+      // sync we (1) wait until Gogo's line is decoded (whenReady) so it can start
+      // the instant the panel appears — killing the first-line lag — then (2)
+      // reveal the panel and speak on the same tick, and (3) hold the panel until
+      // the LINE itself finishes (playVO resolves on its real end), never a blind
+      // timer, so the line is never clipped by the next screen. readMs is only a
+      // floor for the case where a recording is missing (playVO resolves at once).
       function welcome(text) {
-        var p = UI.WelcomePanel(text);
-        s.appendChild(p);
-        A.playVO(text);
-        return FX.wait(readMs(text) + 600).then(function () { p.remove(); });
+        return A.whenReady(text).then(function () {
+          // pace the word-by-word reveal to the VOICE: spread the words across
+          // ~80% of the spoken line so they land in step with Gogo and finish a
+          // beat before the line ends. Falls back to the default pace (0.11s) if
+          // the duration is unknown. word-pop itself runs 0.34s (see style.css).
+          var dur = A.voDuration(text);
+          var words = String(text).split(/\s+/).filter(Boolean).length;
+          var stagger = (dur && words > 1)
+            ? Math.max(0.12, Math.min(0.7, (dur * 0.8) / (words - 1)))
+            : 0.11;
+          var p = UI.WelcomePanel(text, stagger);
+          s.appendChild(p);
+          var spoken = A.playVO(text);
+          var minShow = FX.wait(readMs(text));
+          return Promise.all([spoken, minShow])
+            .then(function () { return FX.wait(400); })   // small beat after the line
+            .then(function () { p.remove(); });
+        });
       }
 
       var seq = FX.wait(150);
