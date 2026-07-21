@@ -252,7 +252,7 @@ HS.Audio = (function () {
     /* --- task panels --- */
     'measure how long the table is': G + 'Measure how long the table is.ogg',
     'measure how tall the candle is': G + 'Measure how tall the candle is.ogg',
-    'guess how many handspans tall the candle stand is': G + 'Guess how many handspans tall the candle stand is.ogg',
+    'guess how tall the candle stand is': G + 'Guess how tall the candle stand is.ogg',
     'guess how long the tablecloth is': G + 'Guess how long the tablecloth is.ogg',
     /* --- success / wrong / clue feedback --- */
     'well done': G + 'Well done.ogg',
@@ -271,10 +271,10 @@ HS.Audio = (function () {
     'the cloth is 7 handspans long': G + 'The tablecloth is 7 handspans long.ogg',
     'the cloth is 8 handspans long': G + 'The tablecloth is 8 handspans long.ogg',
     'the cloth is 10 handspans long': G + 'The tablecloth is 10 handspans long.ogg',
-    /* --- flow intros (no recordings exist yet for the candle-stand pair:
-     *     "Here are the candle stands." / "Let us measure how tall each candle
-     *     stand is." — those fall back to the dialogue blip) --- */
+    /* --- flow intros --- */
     'here are the candles': G + 'Here are the candles.ogg',
+    'here are the candle stands': G + 'Here are the candle stands.ogg',
+    'let us measure how tall each candle stand is': G + 'Let us measure how tall each candle stand is.ogg',
     'let us measure how tall each candle is': G + 'Let us measure how tall each candle is.ogg',
     'here are the tablecloths': G + 'Here are the tablecloths.ogg',
     'let us measure how long each tablecloth is': G + 'Let us measure how long each tablecloth is.ogg',

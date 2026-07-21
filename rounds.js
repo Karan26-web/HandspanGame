@@ -2183,7 +2183,7 @@ HS.Rounds = (function () {
         }
         // the instruction panel comes in and STAYS for the whole guess —
         // the tray appears once the line has been read
-        run = run.then(function () { return instructStay(s, 'Guess how many handspans tall the candle stand is.').then(function (p) { panel = p; }); });
+        run = run.then(function () { return instructStay(s, 'Guess how tall the candle stand is.').then(function (p) { panel = p; }); });
         run = run.then(function () { return h.guessPhase({ answer: spans, keepTray: true }); });
         // the verdict plays on THIS screen: the chosen hands fly out of the
         // tray and stack up the stand ONE BY ONE — each popping its count as
