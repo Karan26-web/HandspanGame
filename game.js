@@ -502,14 +502,14 @@ HS.Game = (function () {
       function welcome(text) {
         return A.whenReady(text).then(function () {
           // pace the word-by-word reveal to the VOICE: spread the words across
-          // ~80% of the spoken line so they land in step with Gogo and finish a
-          // beat before the line ends. Falls back to the default pace (0.11s) if
-          // the duration is unknown. word-pop itself runs 0.34s (see style.css).
+          // ~55% of the spoken line so they keep up with (a hair ahead of) Gogo
+          // and never lag behind the voice. Falls back to a snappy default pace
+          // (0.08s) if the duration is unknown. word-pop runs 0.34s (style.css).
           var dur = A.voDuration(text);
           var words = String(text).split(/\s+/).filter(Boolean).length;
           var stagger = (dur && words > 1)
-            ? Math.max(0.12, Math.min(0.7, (dur * 0.8) / (words - 1)))
-            : 0.11;
+            ? Math.max(0.08, Math.min(0.32, (dur * 0.55) / (words - 1)))
+            : 0.08;
           var p = UI.WelcomePanel(text, stagger);
           s.appendChild(p);
           var spoken = A.playVO(text);

@@ -15,11 +15,16 @@
   function fit() {
     var stage = document.getElementById('stage');
     if (!stage) return;
-    // visualViewport is the reliable size on phones (collapsing URL bars,
-    // pinch zoom); innerWidth/innerHeight is the desktop fallback
-    var vv = window.visualViewport;
-    var vw = vv ? vv.width : window.innerWidth;
-    var vh = vv ? vv.height : window.innerHeight;
+    // Scale to the SAME box that lays out and centres the stage — the
+    // #viewport container (position:fixed; inset:0). Its clientWidth/Height
+    // track browser/page zoom correctly, whereas window.visualViewport does
+    // NOT reflect page zoom (Cmd/Ctrl +): its width stays at the un-zoomed
+    // value, so scaling by it left the stage larger than its shrunken
+    // container and it spilled off to one side. innerWidth/Height is the
+    // fallback when the container isn't found yet.
+    var vp = document.getElementById('viewport');
+    var vw = vp ? vp.clientWidth : window.innerWidth;
+    var vh = vp ? vp.clientHeight : window.innerHeight;
     var scale = Math.min(vw / DESIGN_W, vh / DESIGN_H);
     stage.style.setProperty('--scale', scale);
   }
