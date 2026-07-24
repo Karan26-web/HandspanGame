@@ -51,10 +51,10 @@ HS.Tutorial = (function () {
     var b = UI.SayBubble(text, 'left');
     Object.assign(b.style, bubblePos(pose));
     s.appendChild(b);
-    A.playVO(text);
-    // no Next button here — the line holds for its reading time, then the
-    // flow moves on by itself
-    return FX.wait(h.readMs(text) + 600).then(function () { b.remove(); });
+    // no Next button here — the line holds for its reading time AND for the
+    // recorded voice (whichever runs longer), then the flow moves on by itself
+    return Promise.all([A.playVO(text), FX.wait(h.readMs(text) + 600)])
+      .then(function () { b.remove(); });
   }
 
   function start(config, h) {
@@ -153,7 +153,7 @@ HS.Tutorial = (function () {
         var b = UI.SayBubble('Tap to select this table.', 'left');
         Object.assign(b.style, bubblePos('horizontal'));
         s.appendChild(b);
-        A.playVO('Tap to select this table.');
+        var voDone = A.playVO('Tap to select this table.');
 
         var nudge = UI.HandNudge();
         nudge.classList.add('hand-nudge--tap');
@@ -163,8 +163,6 @@ HS.Tutorial = (function () {
 
         return new Promise(function (resolve) {
           var card = cards[center];
-          card.style.cursor = 'pointer';
-          card.addEventListener('mouseenter', function () { A.playHover(); });
           function pick() {
             card.removeEventListener('click', pick);
             A.playClick();
@@ -177,7 +175,13 @@ HS.Tutorial = (function () {
             card._table.style.transform = 'scale(1.12)';
             setTimeout(resolve, 460);
           }
-          card.addEventListener('click', pick);
+          // the table becomes tappable only once the prompt's voice-over has
+          // finished — tapping mid-line used to carry the voice into the lesson
+          voDone.then(function () {
+            card.style.cursor = 'pointer';
+            card.addEventListener('mouseenter', function () { A.playHover(); });
+            card.addEventListener('click', pick);
+          });
         });
       });
 

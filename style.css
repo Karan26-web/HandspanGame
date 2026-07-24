@@ -444,6 +444,9 @@ html, body {
    don't invite interaction — no pointer cursor */
 .hall-carousel--fixed .hall-card { cursor: default; }
 .hall-carousel--fixed .hall-card.is-center:not(.hall-card--done) { cursor: pointer; }
+/* during the intro presentation nothing is tappable yet (the highlight glow
+   hasn't landed), so no card invites a click */
+.hall-carousel--fixed.hall-carousel--intro .hall-card { cursor: default; }
 /* entrance recap: the just-measured card holds the spotlight, bright (not
    greyed like a normal done card) so its "N handspans" chip reads clearly */
 .hall-card--done.hall-card--recap.is-center { filter: brightness(1.05); animation: none; }

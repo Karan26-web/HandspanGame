@@ -165,13 +165,13 @@ HS.Rounds = (function () {
     var seq = FX.wait(350).then(function () { UI.gogoAppear(g); return FX.wait(500); });
     lines.forEach(function (text) {
       seq = seq.then(function () {
-        return new Promise(function (res) {
-          var b = UI.SayBubble(text, 'left');
-          Object.assign(b.style, opts.bubble || GOGO_BUBBLE);
-          s.appendChild(b);
-          A.playVO(text);
-          setTimeout(function () { b.remove(); res(); }, lineMs(text));
-        });
+        var b = UI.SayBubble(text, 'left');
+        Object.assign(b.style, opts.bubble || GOGO_BUBBLE);
+        s.appendChild(b);
+        // hold for the reading time AND the recorded line, whichever runs
+        // longer — the flow can never move on while the voice is still going
+        return Promise.all([A.playVO(text), FX.wait(lineMs(text))])
+          .then(function () { b.remove(); });
       });
     });
     return seq.then(function () { return UI.gogoVanish(g); }).then(function () { g.remove(); });
@@ -1593,14 +1593,20 @@ HS.Rounds = (function () {
       }
       layout();
 
-      // the sequence is FIXED: only the centred, next-in-line item is tappable
+      // the sequence is FIXED: only the centred, next-in-line item is tappable —
+      // and only once its highlight glow is on, i.e. after the intro/recap
+      // sequence (and its voice-over) has fully finished. Tapping earlier used
+      // to fire mid-voice-over and carry the line into the next screen.
       var picked = false;   // guards against double-taps re-running the round
+      function tappable(card, i) {
+        return card._node.classList.contains(opts.glowClass) && !isDone(i);
+      }
       cards.forEach(function (card, i) {
         card.addEventListener('mouseenter', function () {
-          if (card.classList.contains('is-center') && !isDone(i)) A.playHover();
+          if (tappable(card, i)) A.playHover();
         });
         card.addEventListener('click', function () {
-          if (picked || !card.classList.contains('is-center') || isDone(i)) return;
+          if (picked || !tappable(card, i)) return;
           picked = true;
           A.playClick(); nudge.remove();
           bgEl.classList.remove('tut-blur');   // never carry the intro blur forward
